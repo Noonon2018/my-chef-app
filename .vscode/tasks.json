@@ -1,0 +1,13 @@
+// tasks.json for Next.js project
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev",
+      "type": "shell",
+      "command": "npm run dev",
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}
