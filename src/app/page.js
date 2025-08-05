@@ -1200,15 +1200,24 @@ export default function Home() {
     setShowAddModal(true);
   };
 
-  // Delete item
+  // Delete item (with custom confirmation modal)
   const handleDeleteItem = (groupPlace, idx) => {
-    if (!window.confirm("ลบของนี้ใช่หรือไม่?")) return;
-    const groups = shoppingGroups.map(g =>
-      g.place === groupPlace
-        ? { ...g, items: g.items.filter((_, i) => i !== idx) }
-        : g
+    const group = shoppingGroups.find(g => g.place === groupPlace);
+    if (!group) return;
+    const item = group.items[idx];
+    showConfirm(
+      `คุณแน่ใจหรือไม่ว่าต้องการลบ '${item.name}'? การกระทำนี้ไม่สามารถย้อนกลับได้`,
+      () => {
+        setConfirmModal(m => ({ ...m, open: false }));
+        const groups = shoppingGroups.map(g =>
+          g.place === groupPlace
+            ? { ...g, items: g.items.filter((_, i) => i !== idx) }
+            : g
+        );
+        saveShoppingGroups(groups);
+        showToast(`✓ ลบ '${item.name}' เรียบร้อยแล้ว`);
+      }
     );
-    saveShoppingGroups(groups);
   };
 
   // Copy list to clipboard
