@@ -70,10 +70,11 @@ function getShoppingGroups() {
   try {
     const parsed = JSON.parse(saved);
     if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].place) {
-      return parsed;
+      // อัปเกรดชื่อกลุ่มเก่าเป็นชื่อใหม่
+      return parsed.map(g => g.place === "ไม่ระบุ" ? { ...g, place: "วัตถุดิบของคุณ" } : g);
     } else if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].name) {
       // กรณีเก่า: array ของ item เดี่ยวๆ
-      return [{ place: "ไม่ระบุ", items: parsed }];
+      return [{ place: "วัตถุดิบของคุณ", items: parsed }];
     }
     return [];
   } catch {
@@ -250,11 +251,12 @@ function AnalysisTab({ history, shoppingGroups, saveShoppingGroups }) {
       />
       <PantryStaplesCard
         recipes={recipes}
-        onAddToShoppingList={name => {
+        onAddToShoppingList={(name, menuName) => {
           let groups = [...shoppingGroups];
-          let groupIdx = groups.findIndex(g => g.place === "ไม่ระบุ");
+          const placeName = menuName || "วัตถุดิบของคุณ";
+          let groupIdx = groups.findIndex(g => g.place === placeName);
           if (groupIdx === -1) {
-            groups.push({ place: "ไม่ระบุ", items: [] });
+            groups.push({ place: placeName, items: [] });
             groupIdx = groups.length - 1;
           }
           // ไม่เพิ่มซ้ำ
@@ -312,6 +314,7 @@ function AnalysisTab({ history, shoppingGroups, saveShoppingGroups }) {
 function PantryStaplesCard({ recipes, onAddToShoppingList, onAddRecipe }) {
   // วิเคราะห์วัตถุดิบจากทุกสูตร พร้อมเก็บสูตรที่ใช้แต่ละวัตถุดิบ
   const [expanded, setExpanded] = React.useState(null);
+  const [toast, setToast] = React.useState({ open: false, msg: "" });
   const pantryMap = {};
   recipes.forEach(r => r.ingredients.forEach(i => {
     if (!i.name) return;
@@ -319,7 +322,35 @@ function PantryStaplesCard({ recipes, onAddToShoppingList, onAddRecipe }) {
     pantryMap[i.name].count++;
     pantryMap[i.name].recipes.push({ name: r.name, id: r.id });
   }));
-  const sorted = Object.entries(pantryMap).sort((a,b) => b[1].count-a[1].count).slice(0,5);
+  const sorted = Object.entries(pantryMap).sort((a,b) => b[1].count-a[1].count);
+
+  // เพิ่มวัตถุดิบเข้า Shopping List ใน localStorage
+  // เพิ่ม argument menuName เพื่อส่งชื่อเมนูไปยัง parent
+  const handleAddToShoppingList = (name, menuName) => {
+    let groups = [];
+    try {
+      groups = JSON.parse(localStorage.getItem("mychef-items") || "[]");
+    } catch { groups = []; }
+    // อัปเกรดชื่อกลุ่มเก่าเป็นชื่อใหม่
+    groups = groups.map(g => g.place === "ไม่ระบุ" ? { ...g, place: "วัตถุดิบของคุณ" } : g);
+    const placeName = menuName || "วัตถุดิบของคุณ";
+    let groupIdx = groups.findIndex(g => g.place === placeName);
+    if (groupIdx === -1) {
+      groups.push({ place: placeName, items: [] });
+      groupIdx = groups.length - 1;
+    }
+    // ไม่เพิ่มซ้ำ
+    if (!groups[groupIdx].items.some(i => i.name === name)) {
+      groups[groupIdx].items.push({ name, amount: "1", unit: "ชิ้น", note: "", id: Date.now() + Math.random() });
+      localStorage.setItem("mychef-items", JSON.stringify(groups));
+      setToast({ open: true, msg: `เพิ่ม "${name}" ในลิสต์ซื้อของแล้ว` });
+      // trigger event ให้ component อื่นรีเฟรช (optional)
+      window.dispatchEvent(new Event("storage"));
+    } else {
+      setToast({ open: true, msg: `มี "${name}" อยู่ในลิสต์แล้ว` });
+    }
+    if (onAddToShoppingList) onAddToShoppingList(name, menuName);
+  };
 
   return (
     <div className="bg-white rounded-xl shadow p-6 flex flex-col gap-4">
@@ -339,7 +370,7 @@ function PantryStaplesCard({ recipes, onAddToShoppingList, onAddRecipe }) {
                 <div className="flex items-center gap-2">
                   <button
                     className="ml-2 px-3 py-1 rounded bg-green-100 text-green-700 font-bold hover:bg-green-200 text-sm"
-                    onClick={e => { e.stopPropagation(); onAddToShoppingList(name); }}
+                    onClick={e => { e.stopPropagation(); handleAddToShoppingList(name, data.recipes[0]?.name); }}
                   >+ เพิ่ม</button>
                   <span className="text-gray-400 text-lg">{expanded === idx ? '▴' : '▾'}</span>
                 </div>
@@ -367,6 +398,13 @@ function PantryStaplesCard({ recipes, onAddToShoppingList, onAddRecipe }) {
         className="mt-4 px-4 py-3 rounded-xl bg-green-600 text-white font-bold text-lg hover:bg-green-700 shadow flex items-center gap-2 justify-center"
         onClick={onAddRecipe}
       >+ เพิ่มสูตรอาหารใหม่</button>
+      {toast.open && (
+        <div className="fixed left-1/2 bottom-8 z-[9999] -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2 text-lg font-bold animate-fadein drop-shadow-lg select-none">
+          <span className="text-2xl">✓</span>
+          <span>{toast.msg}</span>
+          <button className="ml-2 text-white text-xl" onClick={() => setToast({ open: false, msg: "" })}>×</button>
+        </div>
+      )}
     </div>
   );
 }
