@@ -137,42 +137,66 @@ function EditableBasketItem({ item, onChange, onDelete }) {
     );
   }
   return (
-    <li className="flex flex-col gap-2 bg-gray-50 rounded px-3 py-2 border border-blue-300">
-      <div className="flex gap-2 items-end">
-        <input className="flex-1 border rounded px-2 py-1 font-bold" value={name} onChange={e => setName(e.target.value)} />
-        <div className="flex items-center gap-1">
+    <li className="flex flex-col gap-4 bg-gray-50 rounded px-3 py-4 border border-blue-300">
+      {/* Item name (static) */}
+      <div className="text-xl font-bold text-gray-800 mb-1">{name}</div>
+      {/* Amount */}
+      <div>
+        <div className="text-sm text-gray-600 mb-1">จำนวน:</div>
+        <div className="flex items-center gap-3">
           <button
-            className="px-2 py-1 rounded bg-gray-200 text-lg font-bold hover:bg-gray-300"
+            className="w-10 h-10 rounded-full bg-gray-200 text-2xl font-bold hover:bg-gray-300"
             onClick={() => setAmount(a => String(Math.max(1, Number(a) - 1)))}
             type="button"
           >-</button>
-          <input
-            className="w-12 border rounded px-2 py-1 text-center font-bold"
-            type="number"
-            min="1"
-            value={amount}
-            onChange={e => setAmount(e.target.value.replace(/[^0-9]/g, '') || '1')}
-          />
+          <span className="w-10 text-center text-lg font-bold">{amount}</span>
           <button
-            className="px-2 py-1 rounded bg-gray-200 text-lg font-bold hover:bg-gray-300"
+            className="w-10 h-10 rounded-full bg-gray-200 text-2xl font-bold hover:bg-gray-300"
             onClick={() => setAmount(a => String(Number(a) + 1))}
             type="button"
           >+</button>
         </div>
-        <select className="border rounded px-2 py-1 font-bold" value={unit} onChange={e => setUnit(e.target.value)}>
-          <option>ชิ้น</option>
-          <option>แพ็ค</option>
-          <option>ขวด</option>
-          <option>ถุง</option>
-          <option>กล่อง</option>
-          <option>กิโลกรัม</option>
-          <option>ลิตร</option>
-          <option>อื่นๆ</option>
-        </select>
-        <button className="ml-2 px-3 py-1 rounded bg-green-600 text-white font-bold hover:bg-green-700" onClick={() => { onChange({ name, amount, unit, note }); setEdit(false); }}>บันทึก</button>
-        <button className="ml-2 px-2 py-1 rounded bg-gray-300 text-gray-700 font-bold hover:bg-gray-400" onClick={() => setEdit(false)}>ยกเลิก</button>
       </div>
-      <textarea className="w-full border rounded px-2 py-1 font-bold mt-2" value={note} onChange={e => setNote(e.target.value)} placeholder="บันทึก/หมายเหตุ (ไม่บังคับ)" rows={1} maxLength={100} />
+      {/* Unit button group */}
+      <div>
+        <div className="text-sm text-gray-600 mb-1">หน่วย:</div>
+        <div className="flex flex-wrap gap-2">
+          {['ชิ้น','ขวด','แพ็ค','กิโลกรัม','อื่นๆ'].map(u => (
+            <button
+              key={u}
+              className={`px-4 py-2 rounded-full font-bold border transition-colors ${unit===u ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50'}`}
+              onClick={() => setUnit(u)}
+              type="button"
+            >{u}</button>
+          ))}
+        </div>
+        {/* Dropdown for custom unit if 'อื่นๆ' selected */}
+        {unit === 'อื่นๆ' && (
+          <input
+            className="mt-2 border rounded px-3 py-2 font-bold w-40"
+            value={unit}
+            onChange={e => setUnit(e.target.value)}
+            placeholder="ระบุหน่วยเอง"
+            maxLength={20}
+          />
+        )}
+      </div>
+      {/* Note */}
+      <div>
+        <div className="text-sm text-gray-600 mb-1">บันทึก/หมายเหตุ (ไม่บังคับ):</div>
+        <input
+          className="w-full border rounded px-3 py-2 font-bold"
+          value={note}
+          onChange={e => setNote(e.target.value)}
+          placeholder="พิมพ์ข้อความ..."
+          maxLength={100}
+        />
+      </div>
+      {/* Action buttons */}
+      <div className="flex gap-2 justify-end mt-2">
+        <button className="px-4 py-2 rounded bg-gray-200 text-gray-700 font-bold" onClick={() => setEdit(false)}>ยกเลิก</button>
+        <button className="px-4 py-2 rounded bg-green-600 text-white font-bold shadow-md hover:bg-green-700 transition-colors" onClick={() => { onChange({ name, amount, unit, note }); setEdit(false); }}>บันทึกการแก้ไข</button>
+      </div>
     </li>
   );
 }
@@ -713,7 +737,38 @@ export default function Home() {
                           disabled={!itemName.trim()}
                         >+</button>
                       </div>
-                      {/* Frequent items chips for this store */}
+                      {/* Frequent items chips: global or by place */}
+                      {(!basketPlace || frequentItems.length === 0) && (() => {
+                        // Show global frequent items if no place or no place-specific frequent items
+                        // Calculate top 4-5 most frequent items overall
+                        const freq = {};
+                        history.forEach(h => h.groups.forEach(g => g.items.forEach(i => {
+                          freq[i.name] = (freq[i.name] || 0) + 1;
+                        })));
+                        shoppingGroups.forEach(g => g.items.forEach(i => {
+                          freq[i.name] = (freq[i.name] || 0) + 1;
+                        }));
+                        const globalTop = Object.entries(freq).sort((a,b) => b[1]-a[1]).map(([name]) => name).slice(0,5);
+                        if (globalTop.length === 0) return null;
+                        return (
+                          <div className="mt-2 flex flex-wrap gap-2 items-center">
+                            <span className="text-sm text-gray-500 font-bold mr-2">ซื้อบ่อย (โดยรวม):</span>
+                            {globalTop.map(name => (
+                              <button
+                                key={name}
+                                className="px-3 py-1 rounded-full bg-green-100 text-green-700 font-bold text-sm hover:bg-green-200 border border-green-300"
+                                type="button"
+                                onClick={() => {
+                                  setBasketItems([...basketItems, { name, amount: "1", unit: "ชิ้น", note: "" }]);
+                                  setItemName("");
+                                  setShowSuggestions(false);
+                                }}
+                                disabled={basketItems.some(b => b.name === name)}
+                              >{name}</button>
+                            ))}
+                          </div>
+                        );
+                      })()}
                       {basketPlace && frequentItems.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-2 items-center">
                           <span className="text-sm text-gray-500 font-bold mr-2">ซื้อบ่อยที่ {basketPlace}:</span>
@@ -779,6 +834,11 @@ export default function Home() {
                     <div key={group.place} className="w-full">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="font-bold text-lg text-gray-800">{group.place}</span>
+                        <button
+                          className="ml-2 px-2 py-1 rounded bg-blue-100 text-blue-700 font-bold hover:bg-blue-200 text-base"
+                          title="เพิ่มของในร้านนี้"
+                          onClick={() => handleQuickAddToGroup(group.place)}
+                        >+</button>
                       </div>
                       {group.items.length === 0 ? (
                         <div className="text-gray-400 text-base font-medium py-2">ยังไม่มีของในร้านนี้</div>
