@@ -1,4 +1,5 @@
 "use client";
+import CurrentUserDisplay from "./CurrentUserDisplay";
 // Modal สำหรับแก้ไขสูตรอาหาร
 function EditRecipeModal({ open, recipe, onSave, onClose }) {
   const iconOptions = React.useMemo(() => ["🍲","🥩","🐔","🐟","🥦","🍳","🍜","🍚","🍤","🥗","🍕","🍰"], []);
@@ -1290,11 +1291,25 @@ export default function Home() {
 
   // Copy list to clipboard
   const handleCopyList = () => {
+    // หาชื่อผู้จดลิสต์และวันเวลาล่าสุด (ถ้ามีใน history)
+    let listOwner = "";
+    let listDate = "";
+    if (history && history.length > 0) {
+      listOwner = history[0].owner || "";
+      if (history[0].date) {
+        const d = new Date(history[0].date);
+        listDate = d.toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      }
+    }
+    let header = "";
+    if (listOwner) header += `ผู้จดลิสต์: ${listOwner}\n`;
+    if (listDate) header += `วันที่: ${listDate}\n`;
+    if (header) header += "---------------------\n";
     let text = shoppingGroups.map(g =>
       (g.place ? `[${g.place}]\n` : "") +
       g.items.map(i => `- ${i.name}${i.amount ? ` (${i.amount}${i.unit || ''})` : ''}${i.note ? ` : ${i.note}` : ''}`).join("\n")
     ).join("\n\n");
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(header + text);
     showToast("✓ คัดลอกลิสต์เรียบร้อยแล้ว");
   };
 
@@ -1309,8 +1324,12 @@ export default function Home() {
       "คุณต้องการสิ้นสุดการซื้อและย้ายลิสต์นี้ไปที่ประวัติใช่ไหม?",
       () => {
         setConfirmModal(m => ({ ...m, open: false }));
+        let listOwner = "";
+        if (typeof window !== "undefined") {
+          listOwner = localStorage.getItem("mychef_user") || "";
+        }
         const newHistory = [
-          { date: new Date().toISOString(), groups: shoppingGroups },
+          { date: new Date().toISOString(), groups: shoppingGroups, owner: listOwner },
           ...history
         ];
         setHistory(newHistory);
@@ -1540,6 +1559,8 @@ export default function Home() {
           {/* Current List Tab */}
           {activeTab === 'current' && (
             <div className="relative">
+              {/* ชื่อผู้ใช้ที่เลือก */}
+              <CurrentUserDisplay />
               {/* Floating Add Button */}
               <button
                 className="fixed bottom-8 right-8 z-50 w-16 h-16 rounded-full bg-blue-500 text-white text-4xl shadow-lg flex items-center justify-center hover:bg-blue-600 focus:outline-none focus:ring-4 focus:ring-blue-300"
@@ -1818,12 +1839,14 @@ export default function Home() {
                     const dateStr = new Date(h.date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' });
                     const allItems = h.groups.flatMap(g => g.items || []);
                     const firstPlace = h.groups[0]?.place || 'ไม่ระบุ';
+                    const owner = h.owner || "";
                     return (
                       <li key={i} className="bg-white rounded-xl shadow p-4 flex flex-col gap-2 cursor-pointer hover:bg-green-50 transition" onClick={() => setViewHistoryIdx(i)}>
                         <div className="flex items-center justify-between">
                           <div>
                             <div className="text-green-700 font-bold text-base mb-1">รายการซื้อของ - {dateStr}</div>
                             <div className="text-gray-500 text-sm italic">ซื้อที่ {firstPlace} ({allItems.length} รายการ)</div>
+                            {owner && <div className="text-xs text-gray-600 mt-1">ผู้จดลิสต์: <span className="font-bold text-green-700">{owner}</span></div>}
                           </div>
                           <button
                             className="ml-2 px-4 py-2 rounded bg-green-600 text-white font-bold hover:bg-green-700 flex items-center gap-1"
