@@ -91,35 +91,48 @@ my-chef-app/
 ---
 
 
-## การ deploy
 
-### รันบนเครื่อง
+# My Chef (มายเชฟ)
 
-```sh
-npm install
-npm run dev
-```
+เว็บแอป Next.js สำหรับจัดการลิสต์ซื้อของและสูตรอาหาร ใช้งานง่าย สะดวก เหมาะกับทุกครัวเรือน
 
-### Deploy ขึ้น Vercel/Netlify
+## คุณสมบัติหลัก
 
-- กด Import Project จาก GitHub หรืออัปโหลดไฟล์ทั้งหมด
-- ตั้งค่า build command: `npm run build` และ output: `.next`
-- ตั้งค่า environment (ถ้ามี)
+- จัดการลิสต์ซื้อของแบบแยกร้าน/บิล
+- เพิ่ม/แก้ไข/ลบ รายการสินค้า พร้อมหน่วยและหมายเหตุ
+- ดูประวัติการซื้อย้อนหลังและซื้อซ้ำได้ทันที
+- วิเคราะห์พฤติกรรมการซื้อ เช่น สินค้าที่ซื้อบ่อย, ร้านค้าประจำ, ความถี่ในการซื้อ ฯลฯ
+- รองรับการพิมพ์ลิสต์ซื้อของ (Print) และคัดลอกลิสต์
+- UI ภาษาไทยทั้งหมด พร้อมดีไซน์สวยงามด้วย Tailwind CSS
+- รองรับการใช้งานบนมือถือและเดสก์ท็อป
 
-### Deploy ขึ้น GitHub Pages
+## โครงสร้างเลย์เอาต์
 
-- ใช้ static export (`next export`) และอัปโหลดโฟลเดอร์ `out/` ไปยัง GitHub Pages
+- Header: ชื่อเว็บ (My Chef) + เมนูตั้งค่าเครื่องพิมพ์
+- Main: กล่องพรีวิว 2 ส่วน (Shopping List, Recipes) และแท็บ (ลิสต์ปัจจุบัน, ประวัติ, วิเคราะห์)
+- Footer: © 2025 My Chef
+
+## วิธีเริ่มต้นใช้งาน
+
+1. ติดตั้ง dependencies:
+   ```bash
+   npm install
+   ```
+2. รันเซิร์ฟเวอร์สำหรับพัฒนา:
+   ```bash
+   npm run dev
+   ```
+3. เปิด [http://localhost:3000](http://localhost:3000) เพื่อใช้งานแอป
+
+## เทคโนโลยีที่ใช้
+
+- [Next.js](https://nextjs.org/) (React)
+- [Tailwind CSS](https://tailwindcss.com/)
+
+## หมายเหตุ
+
+- โค้ดและ UI ทั้งหมดเป็นภาษาไทยเพื่อความสะดวกของผู้ใช้
+- ข้อมูลจะถูกเก็บไว้ใน LocalStorage ของเบราว์เซอร์
 
 ---
-
-## เครดิต
-
-สร้างโดยทีม My Chef, 2025
-
----
-
-## Learn More / Next.js
-
-- [Next.js Documentation](https://nextjs.org/docs)
-- [Learn Next.js](https://nextjs.org/learn)
-- [Next.js GitHub repository](https://github.com/vercel/next.js)
+© 2025 My Chef

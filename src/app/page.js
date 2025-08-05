@@ -1,7 +1,7 @@
 "use client";
 // Modal สำหรับแก้ไขสูตรอาหาร
 function EditRecipeModal({ open, recipe, onSave, onClose }) {
-  const iconOptions = ["🍲","🥩","🐔","🐟","🥦","🍳","🍜","🍚","🍤","🥗","🍕","🍰"];
+  const iconOptions = React.useMemo(() => ["🍲","🥩","🐔","🐟","🥦","🍳","🍜","🍚","🍤","🥗","🍕","🍰"], []);
   const [name, setName] = React.useState("");
   const [icon, setIcon] = React.useState(iconOptions[0]);
   const [ingredients, setIngredients] = React.useState("");
@@ -13,7 +13,7 @@ function EditRecipeModal({ open, recipe, onSave, onClose }) {
       setIngredients((recipe.ingredients||[]).map(i => i.name + (i.amount ? ` ${i.amount}` : "")).join("\n"));
       setSteps((recipe.steps||[]).join("\n"));
     }
-  }, [open, recipe]);
+  }, [open, recipe, iconOptions]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
@@ -1084,6 +1084,38 @@ function OrderDetailModal({ order, onClose }) {
   );
 }
 export default function Home() {
+  // Dropdown state for item name auto-suggest
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  // Checkbox state for shopping list items
+  const [checked, setChecked] = useState({});
+  // Dropdown state for place auto-suggest
+  const [showPlaceDropdown, setShowPlaceDropdown] = useState(false);
+  // Ref for place input (for focusing, dropdown, etc.)
+  const placeInputRef = useRef(null);
+  // Frequent items for current place
+  const [frequentItems, setFrequentItems] = useState([]);
+  // Suggestions for item name auto-complete
+  const [itemSuggestions, setItemSuggestions] = useState([]);
+  // Tab state (current/history/recipes)
+  const [activeTab, setActiveTab] = useState('current');
+  // --- State declarations must be at the top before any useEffect or code that uses them ---
+  // Basket modal states (for add/edit item)
+  const [basketPlace, setBasketPlace] = useState("");
+  const [basketItems, setBasketItems] = useState([]);
+  const [itemName, setItemName] = useState("");
+  const [itemAmount, setItemAmount] = useState("1");
+  const [itemUnit, setItemUnit] = useState("ชิ้น");
+  const [itemNote, setItemNote] = useState("");
+  const [itemPlace, setItemPlace] = useState("");
+  const [editItem, setEditItem] = useState(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [placeSuggestions, setPlaceSuggestions] = useState([]);
+  const [shoppingGroups, setShoppingGroups] = useState([]);
+  const [history, setHistory] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("mychef-history") || "[]");
+    } catch { return []; }
+  });
   // Alert Modal state
   const [alertModal, setAlertModal] = useState({ open: false, message: '' });
   const showAlert = (msg) => setAlertModal({ open: true, message: msg });
@@ -1145,26 +1177,13 @@ export default function Home() {
     setItemAmount("1");
     setItemUnit("ชิ้น");
     setItemNote("");
-    setEditItem(null);
   };
-  // For new group
-  const handleCreateNewGroup = () => {
-    setShowAddModal(true);
-    setBasketPlace("");
-    setBasketItems([]);
-    setItemName("");
-    setItemAmount("1");
-    setItemUnit("ชิ้น");
-    setItemNote("");
-    setEditItem(null);
-  };
-  // State for basket modal (multi-add)
-  const [basketPlace, setBasketPlace] = useState("");
-  const [basketItems, setBasketItems] = useState([]);
-  // Auto-complete & frequent items state
-  const [itemSuggestions, setItemSuggestions] = useState([]); // dropdown list
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [frequentItems, setFrequentItems] = useState([]); // chips for current place
+  useEffect(() => {
+    const places = new Set();
+    shoppingGroups.forEach(g => g.place && g.place !== "ไม่ระบุ" && places.add(g.place));
+    history.forEach(h => h.groups.forEach(g => g.place && g.place !== "ไม่ระบุ" && places.add(g.place)));
+    setPlaceSuggestions(Array.from(places));
+  }, [shoppingGroups, history]);
 
   // Modal for viewing history details
   const [viewHistoryIdx, setViewHistoryIdx] = useState(null);
@@ -1173,22 +1192,7 @@ export default function Home() {
   const [viewOrder, setViewOrder] = useState(null);
   const shoppingListRef = useRef(null);
   const recipesRef = useRef(null);
-  const [shoppingGroups, setShoppingGroups] = useState([]);
-  // --- Add/Edit/Delete Shopping Item State & Handlers ---
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [itemName, setItemName] = useState("");
-  const [itemAmount, setItemAmount] = useState("1");
-  const [itemNote, setItemNote] = useState("");
-  const [itemPlace, setItemPlace] = useState("");
-  const [itemUnit, setItemUnit] = useState("ชิ้น");
-  const [editItem, setEditItem] = useState(null); // { groupPlace, idx }
-  const [activeTab, setActiveTab] = useState("current");
-  const [checked, setChecked] = useState({});
-  const [history, setHistory] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("mychef-history") || "[]");
-    } catch { return []; }
-  });
+  // ...existing code...
 
   // Save shopping groups to localStorage
   // ซื้อซ้ำ: Copy all items from a history entry to current list
@@ -1552,15 +1556,66 @@ export default function Home() {
                   <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md relative">
                     <button className="absolute top-2 right-2 p-2 text-gray-400 hover:text-gray-600" onClick={() => { setShowAddModal(false); setEditItem(null); setBasketPlace(""); setBasketItems([]); }}>×</button>
                     {/* Place */}
-                    <div className="mb-3">
+                    <div className="mb-3 relative">
                       <label className="block text-gray-700 mb-1 font-bold">เพิ่มของสำหรับ: <span className="text-green-700">[ {basketPlace || "ไม่ระบุ"} ]</span></label>
                       <input
+                        ref={placeInputRef}
                         className="w-full border rounded px-3 py-2 focus:outline-none focus:ring focus:border-blue-400 font-bold mb-2"
                         value={basketPlace}
-                        onChange={e => setBasketPlace(e.target.value)}
+                        onChange={e => {
+                          setBasketPlace(e.target.value);
+                          setShowPlaceDropdown(!!e.target.value);
+                        }}
                         placeholder="เช่น Lotus, Makro, ตลาดสด"
                         maxLength={30}
+                        autoComplete="off"
+                        onFocus={() => setShowPlaceDropdown(!!basketPlace)}
+                        onBlur={() => setTimeout(() => setShowPlaceDropdown(false), 120)}
+                        onKeyDown={e => {
+                          if (showPlaceDropdown && placeSuggestions.length > 0) {
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault();
+                              const list = document.getElementById('place-dropdown-list');
+                              if (list) list.firstChild?.focus();
+                            }
+                          }
+                        }}
                       />
+                      {/* Dropdown แนะนำร้านค้า */}
+                      {showPlaceDropdown && basketPlace.trim() && (
+                        <ul id="place-dropdown-list" className="absolute left-0 right-0 bg-white border border-gray-200 rounded shadow z-50 mt-1 max-h-48 overflow-auto">
+                          {placeSuggestions.filter(n => n.toLowerCase().startsWith(basketPlace.trim().toLowerCase()) && n !== basketPlace).length === 0 ? (
+                            <li className="px-3 py-2 text-gray-400 select-none">ไม่พบสถานที่แนะนำ</li>
+                          ) : (
+                            placeSuggestions.filter(n => n.toLowerCase().startsWith(basketPlace.trim().toLowerCase()) && n !== basketPlace).slice(0,8).map((n, i, arr) => (
+                              <li
+                                key={n}
+                                tabIndex={0}
+                                className="px-3 py-2 hover:bg-blue-100 cursor-pointer text-gray-700 outline-none"
+                                onMouseDown={() => {
+                                  setBasketPlace(n);
+                                  setShowPlaceDropdown(false);
+                                  placeInputRef.current?.blur();
+                                }}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    setBasketPlace(n);
+                                    setShowPlaceDropdown(false);
+                                    placeInputRef.current?.blur();
+                                  } else if (e.key === 'ArrowDown') {
+                                    e.preventDefault();
+                                    if (i < arr.length - 1) arr[i + 1] && arr[i + 1].ref?.current?.focus();
+                                  } else if (e.key === 'ArrowUp') {
+                                    e.preventDefault();
+                                    if (i > 0) arr[i - 1] && arr[i - 1].ref?.current?.focus();
+                                    else placeInputRef.current?.focus();
+                                  }
+                                }}
+                              >{n}</li>
+                            ))
+                          )}
+                        </ul>
+                      )}
                     </div>
                     {/* Single input for name, add by Enter or +, with auto-complete dropdown */}
                     <div className="mb-3 flex flex-col gap-1 relative">
