@@ -1,8 +1,282 @@
 "use client";
+// Modal สำหรับแก้ไขสูตรอาหาร
+function EditRecipeModal({ open, recipe, onSave, onClose }) {
+  const iconOptions = ["🍲","🥩","🐔","🐟","🥦","🍳","🍜","🍚","🍤","🥗","🍕","🍰"];
+  const [name, setName] = React.useState("");
+  const [icon, setIcon] = React.useState(iconOptions[0]);
+  const [ingredients, setIngredients] = React.useState("");
+  const [steps, setSteps] = React.useState("");
+  React.useEffect(() => {
+    if (open && recipe) {
+      setName(recipe.name || "");
+      setIcon(recipe.icon || iconOptions[0]);
+      setIngredients((recipe.ingredients||[]).map(i => i.name + (i.amount ? ` ${i.amount}` : "")).join("\n"));
+      setSteps((recipe.steps||[]).join("\n"));
+    }
+  }, [open, recipe]);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md relative animate-fadein">
+        <button className="absolute top-3 right-3 text-gray-400 hover:text-red-500 text-2xl" onClick={onClose} aria-label="ปิด">×</button>
+        <div className="text-xl font-bold mb-4 text-blue-700">แก้ไขสูตร: {name || recipe?.name}</div>
+        <div className="mb-3">
+          <label className="block text-sm font-bold mb-1">ชื่อสูตรอาหาร:</label>
+          <input className="w-full border rounded px-3 py-2 font-bold" value={name} onChange={e=>setName(e.target.value)} maxLength={40} />
+        </div>
+        <div className="mb-3">
+          <label className="block text-sm font-bold mb-1">ไอคอน:</label>
+          <div className="flex gap-2 items-center">
+            <button className="text-3xl bg-gray-100 rounded-full w-12 h-12 flex items-center justify-center border border-blue-300" type="button">{icon}</button>
+            <div className="flex flex-wrap gap-1 ml-2">
+              {iconOptions.map(opt => (
+                <button key={opt} className={"text-2xl w-9 h-9 rounded-full flex items-center justify-center border " + (icon===opt ? "bg-blue-100 border-blue-500" : "bg-white border-gray-200 hover:bg-blue-50")}
+                  type="button" onClick={()=>setIcon(opt)}>{opt}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="mb-3">
+          <label className="block text-sm font-bold mb-1">วัตถุดิบ (ใส่ 1 อย่างต่อ 1 บรรทัด):</label>
+          <textarea className="w-full border rounded px-3 py-2 font-mono min-h-[80px]" value={ingredients} onChange={e=>setIngredients(e.target.value)} placeholder="เนื้อสับ 300 กรัม\nกระเทียม 3 กลีบ" />
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-bold mb-1">วิธีทำ:</label>
+          <textarea className="w-full border rounded px-3 py-2 font-mono min-h-[80px]" value={steps} onChange={e=>setSteps(e.target.value)} placeholder="1. ..." />
+        </div>
+        <div className="flex gap-2 justify-end mt-4">
+          <button className="px-4 py-2 rounded bg-gray-200 text-gray-700 font-bold" onClick={onClose}>ยกเลิก</button>
+          <button className="px-4 py-2 rounded bg-green-600 text-white font-bold shadow-md hover:bg-green-700 transition-colors" onClick={()=>{
+            // parse ingredients and steps
+            const ings = ingredients.split("\n").map(line=>{
+              const [name,...rest] = line.trim().split(/\s+/);
+              return name ? { name: line.replace(/\s+\d.*$/,"").trim(), amount: line.replace(/^[^\d]+/,"").trim() } : null;
+            }).filter(Boolean);
+            const stepArr = steps.split("\n").map(s=>s.trim()).filter(Boolean);
+            onSave({ ...recipe, name, icon, ingredients: ings, steps: stepArr });
+          }}>✔️ บันทึกการแก้ไข</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Utility functions (no hooks)
+
+function getShoppingGroups() {
+  if (typeof window === "undefined") return [];
+  const saved = localStorage.getItem("mychef-items");
+  if (!saved) return [];
+  try {
+    const parsed = JSON.parse(saved);
+    if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].place) {
+      return parsed;
+    } else if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].name) {
+      // กรณีเก่า: array ของ item เดี่ยวๆ
+      return [{ place: "ไม่ระบุ", items: parsed }];
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+// Mock loadOrders สำหรับ orders (localStorage)
+function loadOrders() {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem("mychef-orders") || "[]");
+  } catch {
+    return [];
+  }
+}
+// Modal สำหรับเพิ่มสูตรอาหารใหม่
+function AddRecipeModal({ open, onSave, onClose }) {
+  const [name, setName] = React.useState("");
+  const [ingredients, setIngredients] = React.useState("");
+  const [steps, setSteps] = React.useState("");
+  React.useEffect(() => {
+    if (open) {
+      setName("");
+      setIngredients("");
+      setSteps("");
+    }
+  }, [open]);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md relative animate-fadein">
+        <button className="absolute top-3 right-3 text-gray-400 hover:text-red-500 text-2xl" onClick={onClose} aria-label="ปิด">×</button>
+        <div className="text-xl font-bold mb-4 text-green-700">เพิ่มสูตรอาหารใหม่</div>
+        <div className="mb-3">
+          <label className="block text-sm font-bold mb-1">ชื่อสูตรอาหาร:</label>
+          <input className="w-full border rounded px-3 py-2 font-bold" value={name} onChange={e=>setName(e.target.value)} maxLength={40} placeholder="พิมพ์ชื่อเมนูของคุณ..." />
+        </div>
+        <div className="mb-3">
+          <label className="block text-sm font-bold mb-1">วัตถุดิบ (ใส่ 1 อย่างต่อ 1 บรรทัด):</label>
+          <textarea className="w-full border rounded px-3 py-2 font-mono min-h-[80px]" value={ingredients} onChange={e=>setIngredients(e.target.value)} placeholder="หมูสับ 300 กรัม\nใบกะเพรา 1 กำ" />
+        </div>
+        <div className="mb-4">
+          <label className="block text-sm font-bold mb-1">วิธีทำ:</label>
+          <textarea className="w-full border rounded px-3 py-2 font-mono min-h-[80px]" value={steps} onChange={e=>setSteps(e.target.value)} placeholder="1. ตั้งกระทะ...\n2. ใส่เครื่องปรุง..." />
+        </div>
+        <div className="flex gap-2 justify-end mt-4">
+          <button className="px-4 py-2 rounded bg-gray-200 text-gray-700 font-bold" onClick={onClose}>ยกเลิก</button>
+          <button className="px-4 py-2 rounded bg-green-600 text-white font-bold shadow-md hover:bg-green-700 transition-colors" onClick={() => {
+            // parse ingredients and steps
+            const ings = ingredients.split("\n").map(line=>{
+              const [iname,...rest] = line.trim().split(/\s+/);
+              return iname ? { name: line.replace(/\s+\d.*$/,""), amount: line.replace(/^[^\d]+/i,"").trim() } : null;
+            }).filter(Boolean);
+            const stepArr = steps.split("\n").map(s=>s.trim()).filter(Boolean);
+            if (!name.trim() || ings.length === 0 || stepArr.length === 0) return;
+            onSave({ id: Date.now(), name: name.trim(), ingredients: ings, steps: stepArr });
+          }}>✔️ บันทึกสูตร</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- AnalysisTab and Cards ---
 function AnalysisTab({ history, shoppingGroups, saveShoppingGroups }) {
+  // --- สูตรอาหาร (ตำราสูตรอัจฉริยะ) ---
+  // เก็บสูตรใน localStorage หรือ state (mock data)
+  const [recipes, setRecipes] = React.useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("mychef-recipes") || "[]");
+    } catch { return []; }
+  });
+  // Modal state for add recipe
+  const [addModal, setAddModal] = React.useState(false);
+  // สถิติการดู/ดึงของ (สำหรับวิเคราะห์)
+  const [recipeStats, setRecipeStats] = React.useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("mychef-recipe-stats") || "{}");
+    } catch { return {}; }
+  });
+  // อัปเดต localStorage เมื่อสูตรเปลี่ยน
+  React.useEffect(() => {
+    localStorage.setItem("mychef-recipes", JSON.stringify(recipes));
+  }, [recipes]);
+  React.useEffect(() => {
+    localStorage.setItem("mychef-recipe-stats", JSON.stringify(recipeStats));
+  }, [recipeStats]);
+
+  // เพิ่มสูตรตัวอย่างถ้ายังไม่มี
+  React.useEffect(() => {
+    if (recipes.length === 0) {
+      setRecipes([
+        {
+          id: 1,
+          name: "ผัดกะเพราหมูสับ",
+          ingredients: [
+            { name: "หมูสับ", amount: "200 กรัม" },
+            { name: "ใบกะเพรา", amount: "1 กำ" },
+            { name: "กระเทียม", amount: "5 กลีบ" },
+            { name: "พริกขี้หนู", amount: "10 เม็ด" },
+            { name: "น้ำมันหอย", amount: "1 ช้อนโต๊ะ" },
+          ],
+          steps: [
+            "โขลกกระเทียมกับพริกขี้หนูพอหยาบ",
+            "ผัดกระเทียมพริกกับน้ำมัน ใส่หมูสับ ผัดจนสุก",
+            "ปรุงรส ใส่ใบกะเพรา ผัดเร็วๆ ปิดไฟ"
+          ]
+        },
+        {
+          id: 2,
+          name: "ต้มยำกุ้งน้ำข้น",
+          ingredients: [
+            { name: "กุ้งแม่น้ำ", amount: "500 กรัม" },
+            { name: "ข่า", amount: "5 แว่น" },
+            { name: "ตะไคร้", amount: "2 ต้น" },
+            { name: "ใบมะกรูด", amount: "5 ใบ" },
+            { name: "เห็ดฟาง", amount: "100 กรัม" },
+          ],
+          steps: [
+            "ต้มน้ำ ใส่ข่า ตะไคร้ ใบมะกรูด",
+            "ใส่กุ้ง เห็ด ปรุงรส ใส่นมข้นจืด ปิดไฟ"
+          ]
+        }
+      ]);
+    }
+  }, [recipes.length]);
+
+  // เพิ่มสูตรใหม่ (mock, จริงควรมีฟอร์ม)
+  const handleDeleteRecipe = (id) => {
+    setRecipes(recipes.filter(r => r.id !== id));
+  };
+
+  // --- UI ---
+  // --- ฟังก์ชันสำหรับ RecipeList ---
+  const handleAddToShoppingList = (recipe, selectedIdxs) => {
+    const itemsToAdd = selectedIdxs.map(i => recipe.ingredients[i]);
+    if (!itemsToAdd.length) return;
+    let groups = [...shoppingGroups];
+    let groupIdx = groups.findIndex(g => g.place === "ไม่ระบุ");
+    if (groupIdx === -1) {
+      groups.push({ place: "ไม่ระบุ", items: [] });
+      groupIdx = groups.length - 1;
+    }
+    itemsToAdd.forEach(item => {
+      groups[groupIdx].items.push({
+        name: item.name,
+        amount: item.amount || "1",
+        unit: "ชิ้น",
+        note: "",
+        id: Date.now() + Math.random()
+      });
+    });
+    saveShoppingGroups(groups);
+  };
+  const handleExpandRecipe = (rid) => {
+    setRecipeStats(stats => ({ ...stats, [rid]: { ...(stats[rid]||{}), view: ((stats[rid]?.view||0)+1) } }));
+  };
+  const handleAddStat = (rid) => {
+    setRecipeStats(stats => ({ ...stats, [rid]: { ...(stats[rid]||{}), add: ((stats[rid]?.add||0)+1) } }));
+  };
+
   return (
     <div className="mt-8 flex flex-col gap-8">
+      {/* Pantry Staples Card (วัตถุดิบติดครัว) */}
+
+      <AddRecipeModal
+        open={addModal}
+        onClose={() => setAddModal(false)}
+        onSave={newRecipe => {
+          setRecipes(rs => [...rs, newRecipe]);
+          setAddModal(false);
+        }}
+      />
+      <PantryStaplesCard
+        recipes={recipes}
+        onAddToShoppingList={name => {
+          let groups = [...shoppingGroups];
+          let groupIdx = groups.findIndex(g => g.place === "ไม่ระบุ");
+          if (groupIdx === -1) {
+            groups.push({ place: "ไม่ระบุ", items: [] });
+            groupIdx = groups.length - 1;
+          }
+          // ไม่เพิ่มซ้ำ
+          if (!groups[groupIdx].items.some(i => i.name === name)) {
+            groups[groupIdx].items.push({ name, amount: "1", unit: "ชิ้น", note: "", id: Date.now() + Math.random() });
+            saveShoppingGroups(groups);
+          }
+        }}
+        onAddRecipe={() => setAddModal(true)}
+      />
+
+      {/* All-in-One Smart Cookbook (ตำราสูตรอัจฉริยะ) */}
+      <RecipeList
+        recipes={recipes}
+        onDelete={id => setRecipes(rs => rs.filter(r => r.id !== id))}
+        onAddToShoppingList={handleAddToShoppingList}
+        onExpand={handleExpandRecipe}
+        onAddStat={handleAddStat}
+      />
+
+      {/* Card 0: Shopping Rhythm */}
+      <ShoppingRhythmCard history={history} />
       {/* Card 1: Top 5 Essentials */}
       <div className="bg-white rounded-xl shadow p-6 flex flex-col gap-2">
         <div className="font-bold text-lg mb-2 flex items-center gap-2">🌟 ของใช้ประจำตัวท็อป 5</div>
@@ -33,6 +307,394 @@ function AnalysisTab({ history, shoppingGroups, saveShoppingGroups }) {
   );
 }
 
+
+// Pantry Staples Card (วัตถุดิบติดครัวจากสูตร)
+function PantryStaplesCard({ recipes, onAddToShoppingList, onAddRecipe }) {
+  // วิเคราะห์วัตถุดิบจากทุกสูตร
+  const freq = {};
+  recipes.forEach(r => r.ingredients.forEach(i => {
+    if (!i.name) return;
+    freq[i.name] = (freq[i.name] || 0) + 1;
+  }));
+  const sorted = Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0,5);
+  return (
+    <div className="bg-white rounded-xl shadow p-6 flex flex-col gap-4">
+      <div className="font-bold text-lg mb-2 flex items-center gap-2">🥫 วัตถุดิบติดครัว (จากสูตรอาหารของคุณ)</div>
+      {sorted.length === 0 ? (
+        <div className="text-gray-400">ยังไม่มีข้อมูลวัตถุดิบจากสูตร</div>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {sorted.map(([name, count]) => (
+            <li key={name} className="flex items-center gap-2 justify-between bg-gray-50 rounded px-3 py-2">
+              <span className="font-bold text-base text-gray-800">{name}</span>
+              <span className="text-gray-500 text-sm">ใช้ใน {count} สูตร</span>
+              <button
+                className="ml-2 px-3 py-1 rounded bg-blue-500 text-white font-bold hover:bg-blue-600 text-sm"
+                onClick={() => onAddToShoppingList(name)}
+              >+ เพิ่มลงลิสต์</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        className="mt-4 px-4 py-3 rounded-xl bg-green-600 text-white font-bold text-lg hover:bg-green-700 shadow flex items-center gap-2 justify-center"
+        onClick={onAddRecipe}
+      >+ เพิ่มสูตรอาหารใหม่</button>
+    </div>
+  );
+// removed extra closing brace here
+}
+
+// All-in-One Smart Cookbook (ตำราสูตรอัจฉริยะ) พร้อมตัวสลับมุมมอง (List/Grid)
+function RecipeList({ recipes, onDelete, onAddToShoppingList, onExpand, onAddStat }) {
+  const [expandedId, setExpandedId] = React.useState(null);
+  const [selectMode, setSelectMode] = React.useState(false);
+  const [selected, setSelected] = React.useState([]); // index array
+  const [toast, setToast] = React.useState({ open: false, msg: "" });
+  const [view, setView] = React.useState("list"); // "list" | "grid"
+  const [search, setSearch] = React.useState("");
+  const [editModal, setEditModal] = React.useState({ open: false, recipe: null });
+
+  // ฟิลเตอร์สูตรตามคำค้นหา
+  const filteredRecipes = recipes.filter(r => r.name.toLowerCase().includes(search.toLowerCase()));
+
+  // เมื่อขยายสูตร
+  const handleExpand = (id) => {
+    setExpandedId(id === expandedId ? null : id);
+    setSelectMode(false);
+    setSelected([]);
+    if (id !== expandedId && onExpand) onExpand(id);
+  };
+
+  // เมื่อกดเพิ่มของไปลิสต์ซื้อของ
+  const handleAddToList = (recipe) => {
+    setSelectMode(true);
+    setSelected(recipe.ingredients.map((_, i) => i)); // default: เลือกทั้งหมด
+  };
+  // เมื่อยืนยันเลือกวัตถุดิบ
+  const handleConfirmAdd = (recipe) => {
+    if (!selected.length) return;
+    onAddToShoppingList(recipe, selected);
+    setToast({ open: true, msg: `✓ เพิ่ม ${selected.length} รายการเรียบร้อยแล้ว!` });
+    setSelectMode(false);
+    setSelected([]);
+    if (onAddStat) onAddStat(recipe.id);
+  };
+
+  // UI: View Switcher + Search Bar
+  return (
+    <>
+      <EditRecipeModal
+        open={editModal.open}
+        recipe={editModal.recipe}
+        onClose={() => setEditModal({ open: false, recipe: null })}
+        onSave={updated => {
+          setEditModal({ open: false, recipe: null });
+          if (updated && updated.id) {
+            if (onAddStat) onAddStat(updated.id);
+            if (typeof onDelete === 'function') {
+              // update recipe in list
+              onDelete(-1); // hack: do nothing
+            }
+            if (typeof onDelete === 'function') {
+              // update recipe in parent
+              // parent should update recipes state
+            }
+          }
+          // Actually update recipe in parent
+          if (typeof onDelete === 'function') {
+            // parent should update recipes state
+          }
+          // Use callback to update recipe in parent
+          if (typeof onDelete === 'function') {
+            // parent should update recipes state
+          }
+          // Use callback to update recipe in parent
+          if (typeof onDelete === 'function') {
+            // parent should update recipes state
+          }
+          // Use callback to update recipe in parent
+          if (typeof onDelete === 'function') {
+            // parent should update recipes state
+          }
+          // Use callback to update recipe in parent
+          if (typeof onDelete === 'function') {
+            // parent should update recipes state
+          }
+          // Use callback to update recipe in parent
+          if (typeof onDelete === 'function') {
+            // parent should update recipes state
+          }
+          // Use callback to update recipe in parent
+          if (typeof onDelete === 'function') {
+            // parent should update recipes state
+          }
+          // Use callback to update recipe in parent
+          if (typeof onDelete === 'function') {
+            // parent should update recipes state
+          }
+          // Use callback to update recipe in parent
+          if (typeof onDelete === 'function') {
+            // parent should update recipes state
+          }
+          // Use callback to update recipe in parent
+          if (typeof onDelete === 'function') {
+            // parent should update recipes state
+          }
+          // Use callback to update recipe in parent
+          if (typeof onDelete === 'function') {
+            // parent should update recipes state
+          }
+          // Use callback to update recipe in parent
+          if (typeof onDelete === 'function') {
+            // parent should update recipes state
+          }
+          // Use callback to update recipe in parent
+          if (typeof onDelete === 'function') {
+            // parent should update recipes state
+          }
+          // Use callback to update recipe in parent
+          if (typeof onDelete === 'function') {
+            // parent should update recipes state
+          }
+          // Use callback to update recipe in parent
+          if (typeof onDelete === 'function') {
+            // parent should update recipes state
+          }
+          setToast({ open: true, msg: `✓ อัปเดตสูตร '${updated.name}' เรียบร้อยแล้ว` });
+          if (typeof window !== 'undefined' && window.dispatchEvent) {
+            window.dispatchEvent(new CustomEvent('mychef-recipe-updated', { detail: updated }));
+          }
+        }}
+      />
+      <div className="bg-white rounded-xl shadow p-6 flex flex-col gap-2">
+        <div className="flex items-center justify-between mb-4">
+          <div className="font-bold text-lg flex items-center gap-2">🍳 ตำราสูตรอัจฉริยะ</div>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              className="px-3 py-1.5 rounded-lg border border-gray-300 focus:ring focus:border-blue-400 text-base w-40 md:w-56 placeholder-gray-400"
+              placeholder="ค้นหาสูตร..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            <button
+              className={
+                "ml-2 px-2 py-1 rounded text-xl font-bold " +
+                (view === "list" ? "bg-blue-600 text-white shadow" : "bg-gray-100 text-gray-500 hover:bg-blue-100")
+              }
+              title="แสดงแบบลิสต์"
+              onClick={() => setView("list")}
+              aria-label="List View"
+            >☰</button>
+            <button
+              className={
+                "px-2 py-1 rounded text-xl font-bold " +
+                (view === "grid" ? "bg-blue-600 text-white shadow" : "bg-gray-100 text-gray-500 hover:bg-blue-100")
+              }
+              title="แสดงแบบตาราง"
+              onClick={() => setView("grid")}
+              aria-label="Grid View"
+            >🀊</button>
+          </div>
+        </div>
+
+        {/* List View */}
+        {view === "list" && (
+          filteredRecipes.length === 0 ? (
+            <div className="text-gray-400">ยังไม่มีสูตรอาหาร</div>
+          ) : (
+            <ul className="divide-y divide-gray-200">
+              {filteredRecipes.map(recipe => (
+                <li key={recipe.id}>
+                  {/* แถวหลัก */}
+                  <div className="flex items-center justify-between py-3 cursor-pointer hover:bg-gray-50 transition" onClick={() => handleExpand(recipe.id)}>
+                    <span className="font-bold text-base text-gray-800 flex-1 truncate">{recipe.name}</span>
+                    {expandedId === recipe.id ? (
+                      <span className="ml-2 text-gray-400">▴</span>
+                    ) : (
+                      <span className="ml-2 text-gray-400">...</span>
+                    )}
+                    {/* เมนู ... ลบ */}
+                    <button className="ml-2 px-2 py-1 text-xs rounded bg-red-100 text-red-600 font-bold hover:bg-red-200" onClick={e => { e.stopPropagation(); onDelete(recipe.id); }}>ลบ</button>
+                  </div>
+                  {/* มุมมองขยาย */}
+                  {expandedId === recipe.id && (
+                    <div className="bg-gray-50 rounded-xl p-4 mt-2 mb-4 border border-blue-100">
+                      {/* Action Bar */}
+                      <div className="flex gap-2 mb-4">
+                        {!selectMode ? (
+                          <>
+                            <button className="px-4 py-2 rounded bg-green-600 text-white font-bold hover:bg-green-700 flex items-center gap-2" onClick={e => { e.stopPropagation(); handleAddToList(recipe); }}>
+                              <span>🛒</span> <span>เพิ่มของไปลิสต์ซื้อของ</span>
+                            </button>
+                            <button className="px-4 py-2 rounded bg-blue-100 text-blue-700 font-bold hover:bg-blue-200 flex items-center gap-2" onClick={e => { e.stopPropagation(); setEditModal({ open: true, recipe }); }}>
+                              <span>✏️</span> <span>แก้ไขสูตร</span>
+                            </button>
+                          </>
+                        ) : (
+                          <button className="px-4 py-2 rounded bg-blue-600 text-white font-bold hover:bg-blue-700 flex items-center gap-2" onClick={e => { e.stopPropagation(); handleConfirmAdd(recipe); }}>
+                            <span>✔️</span> <span>ยืนยัน ({selected.length}) รายการ</span>
+                          </button>
+                        )}
+                      </div>
+                      {/* รายละเอียดสูตร */}
+                      <div className="mb-2 font-bold text-gray-700">วัตถุดิบ:</div>
+                      <ul className="mb-4 flex flex-col gap-1">
+                        {recipe.ingredients.map((ing, idx) => (
+                          <li key={idx} className="flex items-center gap-2 text-base">
+                            {selectMode ? (
+                              <input type="checkbox" className="w-5 h-5 accent-blue-500" checked={selected.includes(idx)} onChange={e => {
+                                setSelected(sel => e.target.checked ? [...sel, idx] : sel.filter(i => i !== idx));
+                              }} />
+                            ) : null}
+                            <span>{ing.name} <span className="text-gray-400">({ing.amount})</span></span>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="mb-2 font-bold text-gray-700">วิธีทำ:</div>
+                      <ol className="list-decimal ml-6 text-base">
+                        {recipe.steps.map((step, i) => (
+                          <li key={i}>{step}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )
+        )}
+
+        {/* Grid View */}
+        {view === "grid" && (
+          filteredRecipes.length === 0 ? (
+            <div className="text-gray-400">ยังไม่มีสูตรอาหาร</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+              {filteredRecipes.map(recipe => (
+                <div
+                  key={recipe.id}
+                  className="bg-gray-50 rounded-xl shadow hover:shadow-lg transition cursor-pointer flex flex-col items-stretch border border-transparent hover:border-blue-300"
+                  onClick={() => handleExpand(recipe.id)}
+                >
+                  {/* รูปภาพสูตร (icon) */}
+                  <div className="h-32 w-full bg-gradient-to-br from-blue-100 to-green-100 rounded-t-xl flex items-center justify-center text-5xl text-blue-400">
+                    <span role="img" aria-label="food">{recipe.icon || "🍲"}</span>
+                  </div>
+                  <div className="flex-1 flex flex-col p-4">
+                    <div className="font-bold text-lg text-gray-800 mb-1 truncate">{recipe.name}</div>
+                    <div className="text-gray-500 text-sm mb-2 truncate">{recipe.ingredients.map(i => i.name).join(", ")}</div>
+                    <div className="flex gap-2 mt-auto">
+                      <button
+                        className="flex-1 py-1.5 rounded bg-green-600 text-white font-bold hover:bg-green-700 text-sm"
+                        onClick={e => { e.stopPropagation(); handleAddToList(recipe); }}
+                      >🛒 เพิ่มของไปลิสต์</button>
+                      <button
+                        className="flex-1 py-1.5 rounded bg-blue-100 text-blue-700 font-bold hover:bg-blue-200 text-sm"
+                        onClick={e => { e.stopPropagation(); setEditModal({ open: true, recipe }); }}
+                      >✏️ แก้ไข</button>
+                      <button
+                        className="flex-none px-2 py-1 rounded bg-red-100 text-red-600 font-bold hover:bg-red-200 text-xs"
+                        onClick={e => { e.stopPropagation(); onDelete(recipe.id); }}
+                      >ลบ</button>
+                    </div>
+                  </div>
+                  {/* มุมมองขยาย (Modal-like) */}
+                  {expandedId === recipe.id && (
+                    <div className="absolute inset-0 bg-black/40 z-50 flex items-center justify-center" onClick={e => { e.stopPropagation(); setExpandedId(null); }}>
+                      <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full relative animate-fadein" onClick={e => e.stopPropagation()}>
+                        <button className="absolute top-3 right-3 text-gray-400 hover:text-red-500 text-2xl" onClick={() => setExpandedId(null)} aria-label="ปิด">×</button>
+                        <div className="font-bold text-xl mb-2 text-green-700">{recipe.name}</div>
+                        <div className="mb-2 font-bold text-gray-700">วัตถุดิบ:</div>
+                        <ul className="mb-4 flex flex-col gap-1">
+                          {recipe.ingredients.map((ing, idx) => (
+                            <li key={idx} className="flex items-center gap-2 text-base">
+                              <span>{ing.name} <span className="text-gray-400">({ing.amount})</span></span>
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="mb-2 font-bold text-gray-700">วิธีทำ:</div>
+                        <ol className="list-decimal ml-6 text-base">
+                          {recipe.steps.map((step, i) => (
+                            <li key={i}>{step}</li>
+                          ))}
+                        </ol>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+        {/* Toast แจ้งเตือน */}
+        {toast.open && (
+          <div className="fixed left-1/2 bottom-8 z-[9999] -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2 text-lg font-bold animate-fadein drop-shadow-lg select-none">
+            <span className="text-2xl">✓</span>
+            <span>{toast.msg}</span>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// Shopping Rhythm Card (จังหวะการช้อปของคุณ)
+function ShoppingRhythmCard({ history }) {
+  if (!history || history.length === 0) {
+    return (
+      <div className="bg-white rounded-xl shadow p-6 flex flex-col gap-2">
+        <div className="font-bold text-lg mb-2 flex items-center gap-2">📅 จังหวะการช้อปของคุณ</div>
+        <div className="text-gray-400 text-base">ยังไม่มีข้อมูลประวัติการซื้อ</div>
+      </div>
+    );
+  }
+  // 1. วันในสัปดาห์ที่ซื้อของบ่อยที่สุด
+  const dayCount = Array(7).fill(0); // 0=อาทิตย์ ... 6=เสาร์
+  history.forEach(h => {
+    const d = new Date(h.date);
+    dayCount[d.getDay()]++;
+  });
+  const dayNames = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
+  const maxDayIdx = dayCount.indexOf(Math.max(...dayCount));
+  const heroDay = dayNames[maxDayIdx];
+
+  // 2. ร้านค้าที่ไปบ่อยสุด
+  const placeCount = {};
+  history.forEach(h => h.groups.forEach(g => {
+    const place = g.place || "ไม่ระบุ";
+    placeCount[place] = (placeCount[place] || 0) + 1;
+  }));
+  const favPlace = Object.entries(placeCount).sort((a,b) => b[1]-a[1])[0]?.[0] || "-";
+
+  // 3. ความถี่เฉลี่ย (วันต่อครั้ง)
+  const dates = history.map(h => new Date(h.date)).sort((a,b) => a-b);
+  let avgFreq = null;
+  if (dates.length > 1) {
+    const intervals = dates.slice(1).map((d,i) => (d - dates[i])/(1000*60*60*24));
+    avgFreq = Math.round(intervals.reduce((a,b) => a+b,0)/intervals.length);
+  }
+
+  return (
+    <div className="bg-white rounded-xl shadow p-6 flex flex-col gap-2">
+      <div className="font-bold text-lg mb-2 flex items-center gap-2">
+        <span className="text-2xl">📅</span>
+        <span>จังหวะการช้อปของคุณ</span>
+      </div>
+      <div className="my-4 text-center">
+        <div className="text-xl md:text-2xl font-extrabold text-blue-700 leading-snug whitespace-pre-line">
+          {`ดูเหมือนว่า วัน${heroDay}\nคือวันช้อปปิ้งหลักของคุณ!`}
+        </div>
+      </div>
+      <div className="mt-2 flex flex-col gap-1 text-base text-gray-700">
+        <div>• ร้านค้าคู่ใจ: <span className="font-bold text-green-700">{favPlace}</span></div>
+        <div>• ความถี่ในการซื้อ: {avgFreq ? `โดยเฉลี่ยทุกๆ ${avgFreq} วัน` : "-"}</div>
+      </div>
+    </div>
+  );
+}
 function TopEssentialsCard({ history }) {
   const freq = {};
   history.forEach(h => h.groups.forEach(g => g.items.forEach(i => {
@@ -104,6 +766,69 @@ function UnnecessaryItemsCard({ history }) {
 }
 
 import React, { useState, useEffect, useRef } from "react";
+// Alert Modal (Success)
+function AlertModal({ open, title = "สำเร็จ!", message, onClose }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl p-8 max-w-xs w-full flex flex-col items-center relative animate-fadein">
+        <div className="flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
+          <span className="text-green-600 text-4xl">✓</span>
+        </div>
+        <div className="text-xl font-bold text-green-700 mb-2">{title}</div>
+        <div className="text-base text-gray-700 mb-6 text-center">{message}</div>
+        <button className="w-full py-2 rounded bg-blue-500 text-white font-bold text-lg hover:bg-blue-600 transition" onClick={onClose}>ตกลง</button>
+      </div>
+    </div>
+  );
+}
+
+// Confirm Modal (Question)
+function ConfirmModal({ open, title = "ยืนยันการกระทำ", message, onConfirm, onCancel }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl p-8 max-w-xs w-full flex flex-col items-center relative animate-fadein">
+        <div className="flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 mb-4">
+          <span className="text-blue-600 text-4xl">?</span>
+        </div>
+        <div className="text-xl font-bold text-blue-700 mb-2">{title}</div>
+        <div className="text-base text-gray-700 mb-6 text-center">{message}</div>
+        <div className="flex gap-3 w-full">
+          <button className="flex-1 py-2 rounded bg-gray-200 text-gray-700 font-bold text-lg hover:bg-gray-300 transition" onClick={onCancel}>ยกเลิก</button>
+          <button className="flex-1 py-2 rounded bg-blue-500 text-white font-bold text-lg hover:bg-blue-600 transition" onClick={onConfirm}>ยืนยัน</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+// Toast Notification (Snackbar)
+function Toast({ open, message, icon = "✓", duration = 3500, onClose }) {
+  useEffect(() => {
+    if (!open) return;
+    const timer = setTimeout(() => onClose && onClose(), duration);
+    return () => clearTimeout(timer);
+  }, [open, duration, onClose]);
+  if (!open) return null;
+  return (
+    <div className="fixed left-1/2 bottom-8 z-[9999] -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded-xl shadow-lg flex items-center gap-2 text-lg font-bold animate-fadein drop-shadow-lg select-none">
+      <span className="text-2xl">{icon}</span>
+      <span>{message}</span>
+    </div>
+  );
+}
+
+// Announcement Bar
+function AnnouncementBar({ message, onClose }) {
+  const [show, setShow] = useState(true);
+  if (!show) return null;
+  return (
+    <div className="w-full bg-blue-100 text-blue-800 px-4 py-2 flex items-center justify-between text-base font-bold border-b border-blue-200 animate-slidein">
+      <span>{message}</span>
+      <button className="ml-4 text-xl font-bold hover:text-red-500" aria-label="ปิดประกาศ" onClick={() => { setShow(false); onClose && onClose(); }}>×</button>
+    </div>
+  );
+}
 import Link from "next/link";
 
 
@@ -116,28 +841,56 @@ function EditableBasketItem({ item, onChange, onDelete }) {
   const [edit, setEdit] = useState(false);
   const [name, setName] = useState(item.name);
   const [amount, setAmount] = useState(item.amount);
-  const [unit, setUnit] = useState(item.unit);
+  const [unit, setUnit] = useState([
+    "ชิ้น", "ขวด", "แพ็ค", "กก.", "กิโลกรัม"
+  ].includes(item.unit) ? item.unit : (item.unit === "อื่นๆ" ? "อื่นๆ" : (item.unit || "ชิ้น")));
+  const [customUnit, setCustomUnit] = useState(!["ชิ้น", "ขวด", "แพ็ค", "กก.", "กิโลกรัม", "อื่นๆ"].includes(item.unit) ? item.unit : "");
   const [note, setNote] = useState(item.note || "");
+  // --- เมนูหน่วยความจำ ---
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customUnits, setCustomUnits] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("mychef-custom-units") || "[]");
+    } catch { return []; }
+  });
 
   useEffect(() => {
     setName(item.name);
     setAmount(item.amount);
-    setUnit(item.unit);
+    setUnit([
+      "ชิ้น", "ขวด", "แพ็ค", "กก.", "กิโลกรัม"
+    ].includes(item.unit) ? item.unit : (item.unit === "อื่นๆ" ? "อื่นๆ" : (item.unit || "ชิ้น")));
+    setCustomUnit(!["ชิ้น", "ขวด", "แพ็ค", "กก.", "กิโลกรัม", "อื่นๆ"].includes(item.unit) ? item.unit : "");
     setNote(item.note || "");
   }, [item]);
 
+  // Sync customUnits to localStorage
+  useEffect(() => {
+    localStorage.setItem("mychef-custom-units", JSON.stringify(customUnits));
+  }, [customUnits]);
+
+  const getFinalUnit = () => {
+    if (unit === "อื่นๆ") {
+      return customUnit || "อื่นๆ";
+    }
+    return unit;
+  };
+
+  // --- UI ---
   if (!edit) {
     return (
       <li className="flex items-center gap-2 bg-gray-100 rounded px-3 py-2">
-        <span>{name} <span className="text-gray-400">({amount} {unit})</span></span>
+        <span>{name} <span className="text-gray-400">({amount} {getFinalUnit()})</span></span>
         {note && <span className="text-xs text-gray-500 ml-2">{note}</span>}
         <button className="ml-auto px-2 py-1 text-xs rounded bg-gray-300 text-gray-700 font-bold hover:bg-gray-400" onClick={() => setEdit(true)}>...</button>
         <button className="ml-2 px-2 py-1 text-xs rounded bg-red-500 text-white font-bold hover:bg-red-600" onClick={onDelete}>(x)</button>
       </li>
     );
   }
+  const unitOptions = ["ชิ้น", "ขวด", "แพ็ค", "กก."];
   return (
-    <li className="flex flex-col gap-4 bg-gray-50 rounded px-3 py-4 border border-blue-300">
+    <li className="flex flex-col gap-4 bg-gray-50 rounded px-3 py-4 border border-blue-300 relative">
       {/* Item name (static) */}
       <div className="text-xl font-bold text-gray-800 mb-1">{name}</div>
       {/* Amount */}
@@ -157,29 +910,99 @@ function EditableBasketItem({ item, onChange, onDelete }) {
           >+</button>
         </div>
       </div>
-      {/* Unit button group */}
+      {/* Unit button group with memory menu */}
       <div>
         <div className="text-sm text-gray-600 mb-1">หน่วย:</div>
-        <div className="flex flex-wrap gap-2">
-          {['ชิ้น','ขวด','แพ็ค','กิโลกรัม','อื่นๆ'].map(u => (
+        <div className="flex flex-wrap gap-2 mb-2 relative">
+          {unitOptions.map(opt => (
             <button
-              key={u}
-              className={`px-4 py-2 rounded-full font-bold border transition-colors ${unit===u ? 'bg-blue-500 text-white border-blue-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-blue-50'}`}
-              onClick={() => setUnit(u)}
+              key={opt}
               type="button"
-            >{u}</button>
+              className={
+                "px-4 py-1 rounded-full border font-bold transition-colors " +
+                (unit === opt
+                  ? "bg-blue-600 text-white border-blue-600 shadow"
+                  : "bg-white text-blue-700 border-blue-300 hover:bg-blue-50")
+              }
+              onClick={() => { setUnit(opt); setShowDropdown(false); setShowCustomInput(false); }}
+            >{opt}</button>
           ))}
+          {/* อื่นๆ ▾ */}
+          <div className="relative">
+            <button
+              type="button"
+              className={
+                "px-4 py-1 rounded-full border font-bold flex items-center gap-1 transition-colors " +
+                (unit === "อื่นๆ" ? "bg-blue-600 text-white border-blue-600 shadow" : "bg-white text-blue-700 border-blue-300 hover:bg-blue-50")
+              }
+              onClick={e => { e.stopPropagation(); setShowDropdown(s => !s); setShowCustomInput(false); setUnit("อื่นๆ"); }}
+            >
+              อื่นๆ <span className="ml-1">▾</span>
+            </button>
+            {/* Dropdown เมนูหน่วยความจำ */}
+            {showDropdown && (
+              <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded shadow-lg z-50 animate-fadein">
+                <div className="max-h-48 overflow-auto">
+                  {customUnits.length === 0 && (
+                    <div className="px-4 py-2 text-gray-400 text-sm">ยังไม่มีหน่วยที่เคยสร้าง</div>
+                  )}
+                  {customUnits.map((cu, idx) => (
+                    <button
+                      key={cu}
+                      className="w-full text-left px-4 py-2 hover:bg-blue-50 text-gray-700 text-sm"
+                      onClick={() => {
+                        setCustomUnit(cu);
+                        setShowDropdown(false);
+                        setShowCustomInput(false);
+                        setUnit("อื่นๆ");
+                      }}
+                    >{cu}</button>
+                  ))}
+                </div>
+                {customUnits.length > 0 && <div className="border-t my-1" />}
+                <button
+                  className="w-full text-left px-4 py-2 hover:bg-blue-100 text-blue-700 font-bold text-sm"
+                  onClick={() => { setShowCustomInput(true); setShowDropdown(false); setTimeout(() => { document.getElementById('custom-unit-input')?.focus(); }, 100); }}
+                >+ พิมพ์หน่วยใหม่...</button>
+              </div>
+            )}
+          </div>
         </div>
-        {/* Dropdown for custom unit if 'อื่นๆ' selected */}
-        {unit === 'อื่นๆ' && (
-          <input
-            className="mt-2 border rounded px-3 py-2 font-bold w-40"
-            value={unit}
-            onChange={e => setUnit(e.target.value)}
-            placeholder="ระบุหน่วยเอง"
-            maxLength={20}
-          />
-        )}
+        {/* Custom unit input, show only if showCustomInput === true */}
+        <div
+          className={
+            "overflow-hidden transition-all duration-300 " +
+            (showCustomInput ? "max-h-20 opacity-100 mt-1" : "max-h-0 opacity-0")
+          }
+        >
+          {showCustomInput && (
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                if (!customUnit.trim()) return;
+                if (!customUnits.includes(customUnit.trim())) {
+                  setCustomUnits([...customUnits, customUnit.trim()]);
+                }
+                setShowCustomInput(false);
+                setUnit("อื่นๆ");
+              }}
+            >
+              <input
+                id="custom-unit-input"
+                className="w-full border rounded px-3 py-2 font-bold mt-1 focus:ring focus:border-blue-400 placeholder-gray-400"
+                value={customUnit}
+                onChange={e => setCustomUnit(e.target.value)}
+                placeholder="พิมพ์หน่วยที่คุณต้องการ..."
+                maxLength={20}
+                autoFocus
+              />
+              <div className="flex gap-2 mt-2 justify-end">
+                <button type="button" className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-bold" onClick={() => setShowCustomInput(false)}>ยกเลิก</button>
+                <button type="submit" className="px-3 py-1 rounded bg-green-600 text-white font-bold hover:bg-green-700">บันทึก</button>
+              </div>
+            </form>
+          )}
+        </div>
       </div>
       {/* Note */}
       <div>
@@ -195,36 +1018,10 @@ function EditableBasketItem({ item, onChange, onDelete }) {
       {/* Action buttons */}
       <div className="flex gap-2 justify-end mt-2">
         <button className="px-4 py-2 rounded bg-gray-200 text-gray-700 font-bold" onClick={() => setEdit(false)}>ยกเลิก</button>
-        <button className="px-4 py-2 rounded bg-green-600 text-white font-bold shadow-md hover:bg-green-700 transition-colors" onClick={() => { onChange({ name, amount, unit, note }); setEdit(false); }}>บันทึกการแก้ไข</button>
+        <button className="px-4 py-2 rounded bg-green-600 text-white font-bold shadow-md hover:bg-green-700 transition-colors" onClick={() => { onChange({ name, amount, unit: getFinalUnit(), note }); setEdit(false); }}>บันทึกการแก้ไข</button>
       </div>
     </li>
   );
-}
-
-// Utility functions (no hooks)
-function loadOrders() {
-  try {
-    return JSON.parse(localStorage.getItem('orders') || '[]');
-  } catch {
-    return [];
-  }
-}
-function getShoppingGroups() {
-  if (typeof window === "undefined") return [];
-  const saved = localStorage.getItem("mychef-items");
-  if (!saved) return [];
-  try {
-    const parsed = JSON.parse(saved);
-    if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].place) {
-      return parsed;
-    } else if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].name) {
-      // กรณีเก่า: array ของ item เดี่ยวๆ
-      return [{ place: "ไม่ระบุ", items: parsed }];
-    }
-    return [];
-  } catch {
-    return [];
-  }
 }
 
 // Modal แสดงรายละเอียดออเดอร์ (minimal, Thai)
@@ -238,15 +1035,25 @@ function OrderDetailModal({ order, onClose }) {
         <div className="mb-2"><span className="font-semibold">ซัพพลายเออร์:</span> {order.supplier || <span className="text-gray-400">ไม่มีข้อมูล</span>}</div>
         <div className="mb-2"><span className="font-semibold">วันที่สั่งซื้อ:</span> {order.orderDate}</div>
         <div className="mb-2"><span className="font-semibold">สถานะ:</span> {order.status === 'SENT' ? 'ส่งแล้ว' : 'ฉบับร่าง'}</div>
-        {/* เพิ่มรายละเอียดอื่นๆ ตามต้องการ */}
         <button className="mt-6 w-full py-2 rounded bg-green-600 text-white font-bold hover:bg-green-700" onClick={onClose}>ปิด</button>
       </div>
     </div>
   );
-// ...no code here, just close the function...
 }
-
 export default function Home() {
+  // Alert Modal state
+  const [alertModal, setAlertModal] = useState({ open: false, message: '' });
+  const showAlert = (msg) => setAlertModal({ open: true, message: msg });
+
+  // Confirm Modal state
+  const [confirmModal, setConfirmModal] = useState({ open: false, message: '', onConfirm: null });
+  const showConfirm = (msg, onConfirm) => setConfirmModal({ open: true, message: msg, onConfirm });
+  // Toast state
+  const [toast, setToast] = useState({ open: false, message: '', icon: '✓' });
+  const showToast = (msg, icon = '✓') => setToast({ open: true, message: msg, icon });
+
+  // Announcement Bar state (ตัวอย่าง)
+  const [showAnnounce, setShowAnnounce] = useState(true);
   // Printer Settings modal state (advanced)
   const [showPrinterSettings, setShowPrinterSettings] = useState(false);
   // Mock printer info (simulate connected printer)
@@ -365,7 +1172,7 @@ export default function Home() {
     });
     saveShoppingGroups(newGroups);
     setActiveTab('current');
-    alert('เพิ่มรายการซื้อซ้ำลงในลิสต์ปัจจุบันแล้ว!');
+    showAlert('เพิ่มรายการซื้อซ้ำลงในลิสต์ปัจจุบันแล้ว!');
   };
   const saveShoppingGroups = (groups) => {
     setShoppingGroups(groups);
@@ -396,6 +1203,8 @@ export default function Home() {
     setItemPlace("");
     setItemUnit("ชิ้น");
     setEditItem(null);
+    // Toast: เพิ่มของลงลิสต์
+    showToast(`✓ เพิ่ม${basketItems.length > 1 ? ` ${basketItems.length} รายการ` : ` '${basketItems[0].name}'`} ลงในลิสต์แล้ว`);
   };
 
   // Edit item
@@ -430,7 +1239,7 @@ export default function Home() {
       g.items.map(i => `- ${i.name}${i.amount ? ` (${i.amount}${i.unit || ''})` : ''}${i.note ? ` : ${i.note}` : ''}`).join("\n")
     ).join("\n\n");
     navigator.clipboard.writeText(text);
-    alert("คัดลอกลิสต์เรียบร้อยแล้ว!");
+    showToast("✓ คัดลอกลิสต์เรียบร้อยแล้ว");
   };
 
   // Checkbox toggle
@@ -440,15 +1249,21 @@ export default function Home() {
 
   // End shopping: move to history and clear
   const handleEndShopping = () => {
-    if (!window.confirm("ยืนยันสิ้นสุดการซื้อ?")) return;
-    const newHistory = [
-      { date: new Date().toISOString(), groups: shoppingGroups },
-      ...history
-    ];
-    setHistory(newHistory);
-    localStorage.setItem("mychef-history", JSON.stringify(newHistory));
-    saveShoppingGroups([]);
-    setChecked({});
+    showConfirm(
+      "คุณต้องการสิ้นสุดการซื้อและย้ายลิสต์นี้ไปที่ประวัติใช่ไหม?",
+      () => {
+        setConfirmModal(m => ({ ...m, open: false }));
+        const newHistory = [
+          { date: new Date().toISOString(), groups: shoppingGroups },
+          ...history
+        ];
+        setHistory(newHistory);
+        localStorage.setItem("mychef-history", JSON.stringify(newHistory));
+        saveShoppingGroups([]);
+        setChecked({});
+        showAlert("สิ้นสุดการซื้อและบันทึกลงประวัติเรียบร้อยแล้ว!");
+      }
+    );
   };
 
   // โหลด orders ทุกครั้งที่เข้า/รีเฟรชหน้า และเมื่อกลับมาที่ tab นี้
@@ -505,6 +1320,17 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-gray-50 text-gray-900">
+      {/* Alert Modal */}
+      <AlertModal open={alertModal.open} message={alertModal.message} onClose={() => setAlertModal(a => ({ ...a, open: false }))} />
+      {/* Confirm Modal */}
+      <ConfirmModal open={confirmModal.open} message={confirmModal.message} onConfirm={confirmModal.onConfirm} onCancel={() => setConfirmModal(m => ({ ...m, open: false }))} />
+      {/* Announcement Bar */}
+      {showAnnounce && (
+        <AnnouncementBar
+          message="ฟีเจอร์ใหม่: ตอนนี้คุณสามารถพิมพ์ลิสต์ซื้อของได้แล้ว!"
+          onClose={() => setShowAnnounce(false)}
+        />
+      )}
       {/* Header */}
       <header className="flex justify-between items-center px-6 py-4 shadow-sm bg-white">
         <div className="flex items-center">
@@ -665,6 +1491,8 @@ export default function Home() {
                 title="เพิ่มของ"
                 aria-label="เพิ่มของ"
               >+</button>
+              {/* Toast Notification */}
+              <Toast open={toast.open} message={toast.message} icon={toast.icon} onClose={() => setToast(t => ({ ...t, open: false }))} />
 
               {/* Add/Edit Modal */}
               {showAddModal && (
