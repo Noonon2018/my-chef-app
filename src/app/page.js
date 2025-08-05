@@ -846,9 +846,7 @@ function EditableBasketItem({ item, onChange, onDelete }) {
   ].includes(item.unit) ? item.unit : (item.unit === "อื่นๆ" ? "อื่นๆ" : (item.unit || "ชิ้น")));
   const [customUnit, setCustomUnit] = useState(!["ชิ้น", "ขวด", "แพ็ค", "กก.", "กิโลกรัม", "อื่นๆ"].includes(item.unit) ? item.unit : "");
   const [note, setNote] = useState(item.note || "");
-  // --- เมนูหน่วยความจำ ---
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [showCustomInput, setShowCustomInput] = useState(false);
+  // --- โซนหน่วยพิเศษ ---
   const [customUnits, setCustomUnits] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("mychef-custom-units") || "[]");
@@ -872,7 +870,7 @@ function EditableBasketItem({ item, onChange, onDelete }) {
 
   const getFinalUnit = () => {
     if (unit === "อื่นๆ") {
-      return customUnit || "อื่นๆ";
+      return customUnit.trim() ? customUnit.trim() : "อื่นๆ";
     }
     return unit;
   };
@@ -910,7 +908,7 @@ function EditableBasketItem({ item, onChange, onDelete }) {
           >+</button>
         </div>
       </div>
-      {/* Unit button group with memory menu */}
+      {/* Unit button group with special zone */}
       <div>
         <div className="text-sm text-gray-600 mb-1">หน่วย:</div>
         <div className="flex flex-wrap gap-2 mb-2 relative">
@@ -924,85 +922,66 @@ function EditableBasketItem({ item, onChange, onDelete }) {
                   ? "bg-blue-600 text-white border-blue-600 shadow"
                   : "bg-white text-blue-700 border-blue-300 hover:bg-blue-50")
               }
-              onClick={() => { setUnit(opt); setShowDropdown(false); setShowCustomInput(false); }}
+              onClick={() => { setUnit(opt); setCustomUnit(""); }}
             >{opt}</button>
           ))}
-          {/* อื่นๆ ▾ */}
-          <div className="relative">
-            <button
-              type="button"
-              className={
-                "px-4 py-1 rounded-full border font-bold flex items-center gap-1 transition-colors " +
-                (unit === "อื่นๆ" ? "bg-blue-600 text-white border-blue-600 shadow" : "bg-white text-blue-700 border-blue-300 hover:bg-blue-50")
-              }
-              onClick={e => { e.stopPropagation(); setShowDropdown(s => !s); setShowCustomInput(false); setUnit("อื่นๆ"); }}
-            >
-              อื่นๆ <span className="ml-1">▾</span>
-            </button>
-            {/* Dropdown เมนูหน่วยความจำ */}
-            {showDropdown && (
-              <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded shadow-lg z-50 animate-fadein">
-                <div className="max-h-48 overflow-auto">
-                  {customUnits.length === 0 && (
-                    <div className="px-4 py-2 text-gray-400 text-sm">ยังไม่มีหน่วยที่เคยสร้าง</div>
-                  )}
-                  {customUnits.map((cu, idx) => (
-                    <button
-                      key={cu}
-                      className="w-full text-left px-4 py-2 hover:bg-blue-50 text-gray-700 text-sm"
-                      onClick={() => {
-                        setCustomUnit(cu);
-                        setShowDropdown(false);
-                        setShowCustomInput(false);
-                        setUnit("อื่นๆ");
-                      }}
-                    >{cu}</button>
-                  ))}
-                </div>
-                {customUnits.length > 0 && <div className="border-t my-1" />}
-                <button
-                  className="w-full text-left px-4 py-2 hover:bg-blue-100 text-blue-700 font-bold text-sm"
-                  onClick={() => { setShowCustomInput(true); setShowDropdown(false); setTimeout(() => { document.getElementById('custom-unit-input')?.focus(); }, 100); }}
-                >+ พิมพ์หน่วยใหม่...</button>
-              </div>
-            )}
-          </div>
+          {/* อื่นๆ (no dropdown, just show special zone below) */}
+          <button
+            type="button"
+            className={
+              "px-4 py-1 rounded-full border font-bold flex items-center gap-1 transition-colors " +
+              (unit === "อื่นๆ" ? "bg-blue-700 text-white border-blue-700 shadow" : "bg-white text-blue-700 border-blue-300 hover:bg-blue-50")
+            }
+            onClick={() => { setUnit("อื่นๆ"); }}
+          >
+            อื่นๆ
+          </button>
         </div>
-        {/* Custom unit input, show only if showCustomInput === true */}
-        <div
-          className={
-            "overflow-hidden transition-all duration-300 " +
-            (showCustomInput ? "max-h-20 opacity-100 mt-1" : "max-h-0 opacity-0")
-          }
-        >
-          {showCustomInput && (
+        {/* Special unit zone: show if unit === "อื่นๆ" */}
+        {unit === "อื่นๆ" && (
+          <div className="mt-2 p-3 rounded-xl border border-blue-200 bg-blue-50 animate-fadein flex flex-col gap-2">
+            <div className="text-sm font-bold text-blue-700 mb-1">หน่วยที่ใช้บ่อย:</div>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {customUnits.length === 0 && (
+                <span className="text-gray-400 text-sm">ยังไม่มีหน่วยที่เคยสร้าง</span>
+              )}
+              {customUnits.map((cu, idx) => (
+                <button
+                  key={cu}
+                  type="button"
+                  className={
+                    "px-3 py-1 rounded-full border font-bold text-blue-700 bg-white border-blue-300 hover:bg-blue-100 transition " +
+                    (customUnit === cu ? "bg-blue-600 text-white border-blue-600" : "")
+                  }
+                  onClick={() => setCustomUnit(cu)}
+                >{cu}</button>
+              ))}
+            </div>
+            <div className="text-sm text-gray-600 mb-1">หรือพิมพ์หน่วยใหม่:</div>
             <form
+              className="flex gap-2"
               onSubmit={e => {
                 e.preventDefault();
                 if (!customUnit.trim()) return;
                 if (!customUnits.includes(customUnit.trim())) {
                   setCustomUnits([...customUnits, customUnit.trim()]);
                 }
-                setShowCustomInput(false);
-                setUnit("อื่นๆ");
+                // ไม่ปิดโซนนี้ ให้เลือกต่อได้
               }}
             >
               <input
                 id="custom-unit-input"
-                className="w-full border rounded px-3 py-2 font-bold mt-1 focus:ring focus:border-blue-400 placeholder-gray-400"
+                className="flex-1 border rounded px-3 py-2 font-bold focus:ring focus:border-blue-400 placeholder-gray-400"
                 value={customUnit}
                 onChange={e => setCustomUnit(e.target.value)}
                 placeholder="พิมพ์หน่วยที่คุณต้องการ..."
                 maxLength={20}
                 autoFocus
               />
-              <div className="flex gap-2 mt-2 justify-end">
-                <button type="button" className="px-3 py-1 rounded bg-gray-200 text-gray-700 font-bold" onClick={() => setShowCustomInput(false)}>ยกเลิก</button>
-                <button type="submit" className="px-3 py-1 rounded bg-green-600 text-white font-bold hover:bg-green-700">บันทึก</button>
-              </div>
+              <button type="submit" className="px-3 py-1 rounded bg-green-600 text-white font-bold hover:bg-green-700">บันทึก</button>
             </form>
-          )}
-        </div>
+          </div>
+        )}
       </div>
       {/* Note */}
       <div>
