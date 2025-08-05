@@ -310,13 +310,17 @@ function AnalysisTab({ history, shoppingGroups, saveShoppingGroups }) {
 
 // Pantry Staples Card (วัตถุดิบติดครัวจากสูตร)
 function PantryStaplesCard({ recipes, onAddToShoppingList, onAddRecipe }) {
-  // วิเคราะห์วัตถุดิบจากทุกสูตร
-  const freq = {};
+  // วิเคราะห์วัตถุดิบจากทุกสูตร พร้อมเก็บสูตรที่ใช้แต่ละวัตถุดิบ
+  const [expanded, setExpanded] = React.useState(null);
+  const pantryMap = {};
   recipes.forEach(r => r.ingredients.forEach(i => {
     if (!i.name) return;
-    freq[i.name] = (freq[i.name] || 0) + 1;
+    if (!pantryMap[i.name]) pantryMap[i.name] = { count: 0, recipes: [] };
+    pantryMap[i.name].count++;
+    pantryMap[i.name].recipes.push({ name: r.name, id: r.id });
   }));
-  const sorted = Object.entries(freq).sort((a,b) => b[1]-a[1]).slice(0,5);
+  const sorted = Object.entries(pantryMap).sort((a,b) => b[1].count-a[1].count).slice(0,5);
+
   return (
     <div className="bg-white rounded-xl shadow p-6 flex flex-col gap-4">
       <div className="font-bold text-lg mb-2 flex items-center gap-2">🥫 วัตถุดิบติดครัว (จากสูตรอาหารของคุณ)</div>
@@ -324,14 +328,37 @@ function PantryStaplesCard({ recipes, onAddToShoppingList, onAddRecipe }) {
         <div className="text-gray-400">ยังไม่มีข้อมูลวัตถุดิบจากสูตร</div>
       ) : (
         <ul className="flex flex-col gap-2">
-          {sorted.map(([name, count]) => (
-            <li key={name} className="flex items-center gap-2 justify-between bg-gray-50 rounded px-3 py-2">
-              <span className="font-bold text-base text-gray-800">{name}</span>
-              <span className="text-gray-500 text-sm">ใช้ใน {count} สูตร</span>
-              <button
-                className="ml-2 px-3 py-1 rounded bg-blue-500 text-white font-bold hover:bg-blue-600 text-sm"
-                onClick={() => onAddToShoppingList(name)}
-              >+ เพิ่มลงลิสต์</button>
+          {sorted.map(([name, data], idx) => (
+            <li key={name} className="">
+              <div
+                className="flex items-center gap-2 justify-between bg-gray-50 rounded px-3 py-2 cursor-pointer hover:bg-gray-100 transition"
+                onClick={() => setExpanded(expanded === idx ? null : idx)}
+                aria-expanded={expanded === idx}
+              >
+                <span className="font-bold text-base text-gray-800">{name} <span className="text-gray-500 text-sm">(ใช้ใน {data.count} สูตร)</span></span>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="ml-2 px-3 py-1 rounded bg-green-100 text-green-700 font-bold hover:bg-green-200 text-sm"
+                    onClick={e => { e.stopPropagation(); onAddToShoppingList(name); }}
+                  >+ เพิ่ม</button>
+                  <span className="text-gray-400 text-lg">{expanded === idx ? '▴' : '▾'}</span>
+                </div>
+              </div>
+              {expanded === idx && (
+                <div className="bg-gray-100 rounded-lg p-3 mt-2 ml-2 animate-fade-in">
+                  {data.recipes.map(recipe => (
+                    <a
+                      key={recipe.id}
+                      href={`#recipe-${recipe.id}`}
+                      className="block py-1 px-2 rounded hover:bg-blue-50 text-blue-700 font-medium flex items-center gap-2"
+                      onClick={e => { e.stopPropagation(); }}
+                    >
+                      <span className="text-green-700">•</span> {recipe.name}
+                      <span className="ml-1">[→]</span>
+                    </a>
+                  ))}
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -342,7 +369,6 @@ function PantryStaplesCard({ recipes, onAddToShoppingList, onAddRecipe }) {
       >+ เพิ่มสูตรอาหารใหม่</button>
     </div>
   );
-// removed extra closing brace here
 }
 
 // All-in-One Smart Cookbook (ตำราสูตรอัจฉริยะ) พร้อมตัวสลับมุมมอง (List/Grid)
