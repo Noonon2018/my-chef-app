@@ -831,6 +831,114 @@ function UnnecessaryItemsCard({ history }) {
 }
 
 import React, { useState, useEffect, useRef } from "react";
+// ...existing code...
+
+// Receipt Attachment Modal
+import imageCompression from "./imageCompression";
+function ReceiptAttachmentModal({ open, groups, onDone, onCancel }) {
+  const [receipts, setReceipts] = useState(() => {
+    // { place: { url, ts } }
+    const obj = {};
+    groups.forEach(g => {
+      obj[g.place] = null;
+    });
+    return obj;
+  });
+  const [preview, setPreview] = useState(null); // { place, url }
+
+  // Attach receipt (camera or file) + compress
+  const handleAttach = async (place) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment';
+    input.onchange = async e => {
+      const file = e.target.files[0];
+      if (file) {
+        try {
+          const options = {
+            maxWidthOrHeight: 1080,
+            useWebWorker: true,
+            initialQuality: 0.8,
+          };
+          const compressedFile = await imageCompression(file, options);
+          const reader = new FileReader();
+          reader.onload = ev => {
+            setReceipts(r => ({ ...r, [place]: { url: ev.target.result, ts: Date.now() } }));
+          };
+          reader.readAsDataURL(compressedFile);
+        } catch (err) {
+          alert("เกิดข้อผิดพลาดในการบีบอัดภาพ: " + err.message);
+        }
+      }
+    };
+    input.click();
+  };
+
+  // Remove receipt
+  const handleRemove = (place) => {
+    setReceipts(r => ({ ...r, [place]: null }));
+  };
+
+  // Preview receipt
+  const handlePreview = (place) => {
+    setPreview({ place, url: receipts[place]?.url });
+  };
+
+  // Confirm preview
+  const handleClosePreview = () => setPreview(null);
+
+  // Done: pass receipts to parent
+  const handleDone = () => {
+    onDone(receipts);
+  };
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full flex flex-col gap-6 relative animate-fadein">
+        <h2 className="text-2xl font-extrabold text-green-700 mb-2 text-center">สรุปการซื้อและแนบใบเสร็จ</h2>
+        <div className="flex flex-col gap-4">
+          {groups.map(g => (
+            <div key={g.place} className="border-b pb-3 flex flex-col gap-2">
+              <div className="font-bold text-lg text-gray-800">{g.place} <span className="text-gray-500 text-base font-normal">({g.items.length} รายการ)</span></div>
+              <div className="flex gap-2 items-center">
+                {!receipts[g.place] ? (
+                  <button className="px-4 py-2 rounded bg-blue-500 text-white font-bold hover:bg-blue-600 flex items-center gap-1" onClick={() => handleAttach(g.place)}>
+                    <span>📸</span> แนบใบเสร็จ
+                  </button>
+                ) : (
+                  <>
+                    <button className="px-4 py-2 rounded bg-green-600 text-white font-bold hover:bg-green-700 flex items-center gap-1" onClick={() => handlePreview(g.place)}>
+                      <span>🖼️</span> ดู/เปลี่ยนรูป
+                    </button>
+                    <button className="px-4 py-2 rounded bg-red-500 text-white font-bold hover:bg-red-600 flex items-center gap-1" onClick={() => handleRemove(g.place)}>
+                      <span>🗑️</span> ลบ
+                    </button>
+                  </>
+                )}
+                {receipts[g.place] && <span className="text-green-600 ml-2">✓</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+        <button className="w-full py-3 rounded-xl bg-blue-500 text-white text-xl font-extrabold shadow-lg hover:bg-blue-600 mt-2" onClick={handleDone}>เสร็จสิ้นและบันทึกประวัติ</button>
+        <button className="absolute top-3 right-3 text-gray-400 hover:text-red-500 text-2xl" onClick={onCancel} aria-label="ปิด">×</button>
+        {/* Preview Modal */}
+        {preview && (
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60">
+            <div className="bg-white rounded-xl shadow-lg p-6 relative max-w-lg w-full flex flex-col items-center">
+              <button className="absolute top-2 right-2 text-gray-400 hover:text-red-500 text-2xl" onClick={handleClosePreview}>×</button>
+              <img src={preview.url} alt="ใบเสร็จ" className="max-w-full max-h-[60vh] rounded mb-4" />
+              <div className="text-center text-lg font-bold mb-2">{preview.place}</div>
+              <button className="px-4 py-2 rounded bg-green-600 text-white font-bold hover:bg-green-700" onClick={handleClosePreview}>ปิด</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 // Alert Modal (Success)
 function AlertModal({ open, title = "สำเร็จ!", message, onClose }) {
   if (!open) return null;
@@ -1084,7 +1192,61 @@ function OrderDetailModal({ order, onClose }) {
     </div>
   );
 }
+// Modal แสดงภาพใบเสร็จที่แนบไว้กับประวัติ (รองรับหลายร้าน)
+function ReceiptViewModal({ receiptsId, onClose }) {
+  const [receipts, setReceipts] = React.useState(null);
+  React.useEffect(() => {
+    if (!receiptsId) return;
+    try {
+      const all = JSON.parse(localStorage.getItem("mychef-receipts") || "{}");
+      setReceipts(all[receiptsId] || {});
+    } catch {
+      setReceipts({});
+    }
+  }, [receiptsId]);
+  if (!receipts) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
+        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full flex flex-col items-center relative animate-fadein">
+          <div className="text-lg text-gray-700 mb-4">กำลังโหลดใบเสร็จ...</div>
+        </div>
+      </div>
+    );
+  }
+  const places = Object.keys(receipts);
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-lg p-6 max-w-md w-full relative animate-fadein">
+        <button className="absolute top-2 right-2 p-2 text-gray-400 hover:text-gray-600" onClick={onClose}>×</button>
+        <h3 className="text-xl font-bold text-blue-700 mb-4">ใบเสร็จที่แนบไว้</h3>
+        {places.length === 0 && <div className="text-gray-400 text-center">ไม่พบใบเสร็จที่แนบไว้</div>}
+        <div className="flex flex-col gap-6">
+          {places.map(place => {
+            const r = receipts[place];
+            if (!r || !r.url) return null;
+            // ตรวจสอบวันหมดอายุ
+            if (r.expire && Date.now() > r.expire) return (
+              <div key={place} className="text-red-500 text-center">ใบเสร็จ {place} หมดอายุแล้ว</div>
+            );
+            return (
+              <div key={place} className="flex flex-col items-center gap-2">
+                <div className="font-bold text-base text-green-700 mb-1">{place}</div>
+                <img src={r.url} alt={`ใบเสร็จ ${place}`} className="max-w-full max-h-64 rounded border shadow" />
+                {r.ts && <div className="text-xs text-gray-500">แนบเมื่อ: {new Date(r.ts).toLocaleString('th-TH')}</div>}
+              </div>
+            );
+          })}
+        </div>
+        <button className="mt-6 w-full py-2 rounded bg-gray-200 text-gray-700 font-bold" onClick={onClose}>ปิด</button>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
+  // ...existing code...
+  // State สำหรับ modal ดูใบเสร็จ
+  const [showReceiptView, setShowReceiptView] = React.useState(null);
   // Dropdown state for item name auto-suggest
   const [showSuggestions, setShowSuggestions] = useState(false);
   // Checkbox state for shopping list items
@@ -1318,27 +1480,57 @@ export default function Home() {
     setChecked(prev => ({ ...prev, [groupPlace + '-' + idx]: !prev[groupPlace + '-' + idx] }));
   };
 
+  // Receipt scan modal state
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [pendingReceipts, setPendingReceipts] = useState(null); // { place: { url, ts } }
+
   // End shopping: move to history and clear
   const handleEndShopping = () => {
     showConfirm(
       "คุณต้องการสิ้นสุดการซื้อและย้ายลิสต์นี้ไปที่ประวัติใช่ไหม?",
       () => {
         setConfirmModal(m => ({ ...m, open: false }));
-        let listOwner = "";
-        if (typeof window !== "undefined") {
-          listOwner = localStorage.getItem("mychef_user") || "";
-        }
-        const newHistory = [
-          { date: new Date().toISOString(), groups: shoppingGroups, owner: listOwner },
-          ...history
-        ];
-        setHistory(newHistory);
-        localStorage.setItem("mychef-history", JSON.stringify(newHistory));
-        saveShoppingGroups([]);
-        setChecked({});
-        showAlert("สิ้นสุดการซื้อและบันทึกลงประวัติเรียบร้อยแล้ว!");
+        setShowReceiptModal(true);
       }
     );
+  };
+
+  // Handle receipt modal done
+  const handleReceiptDone = (receipts) => {
+    let listOwner = "";
+    if (typeof window !== "undefined") {
+      listOwner = localStorage.getItem("mychef_user") || "";
+    }
+    // Save receipts with expiry (48h)
+    const now = Date.now();
+    const receiptsWithExpiry = {};
+    Object.entries(receipts).forEach(([place, obj]) => {
+      if (obj) receiptsWithExpiry[place] = { ...obj, expire: now + 48*60*60*1000 };
+    });
+    // Save to localStorage (key: mychef-receipts)
+    let allReceipts = {};
+    try {
+      allReceipts = JSON.parse(localStorage.getItem("mychef-receipts") || "{}");
+    } catch {}
+    const historyId = now + Math.random();
+    allReceipts[historyId] = receiptsWithExpiry;
+    localStorage.setItem("mychef-receipts", JSON.stringify(allReceipts));
+    // Save history with receiptsId
+    const newHistory = [
+      { date: new Date().toISOString(), groups: shoppingGroups, owner: listOwner, receiptsId: historyId },
+      ...history
+    ];
+    setHistory(newHistory);
+    localStorage.setItem("mychef-history", JSON.stringify(newHistory));
+    saveShoppingGroups([]);
+    setChecked({});
+    setShowReceiptModal(false);
+    showToast("✓ บันทึกประวัติการซื้อเรียบร้อยแล้ว");
+  };
+
+  // Cancel receipt modal
+  const handleReceiptCancel = () => {
+    setShowReceiptModal(false);
   };
 
   // โหลด orders ทุกครั้งที่เข้า/รีเฟรชหน้า และเมื่อกลับมาที่ tab นี้
@@ -1489,6 +1681,13 @@ export default function Home() {
         </div>
       )}
 
+      {/* Receipt Attachment Modal */}
+      <ReceiptAttachmentModal
+        open={showReceiptModal}
+        groups={shoppingGroups}
+        onDone={handleReceiptDone}
+        onCancel={handleReceiptCancel}
+      />
       {/* Main Content */}
       <main className="flex-1 flex flex-col items-center justify-center p-6">
         <div className="w-full max-w-2xl mx-auto mt-8">
@@ -1862,26 +2061,44 @@ export default function Home() {
 
               {/* History Detail Modal */}
               {viewHistoryIdx !== null && history[viewHistoryIdx] && (
-                <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-                  <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-lg relative">
-                    <button className="absolute top-2 right-2 p-2 text-gray-400 hover:text-gray-600" onClick={() => setViewHistoryIdx(null)}>×</button>
-                    <h2 className="text-xl font-extrabold mb-4">รายละเอียดการซื้อ - {new Date(history[viewHistoryIdx].date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</h2>
-                    {history[viewHistoryIdx].groups.map((group, gi) => (
-                      <div key={gi} className="mb-3">
-                        <div className="font-bold text-base text-green-700 mb-1">{group.place}</div>
-                        <ul className="flex flex-col gap-1">
-                          {group.items.map((item, idx) => (
-                            <li key={item.id} className="text-gray-700 text-base flex items-center gap-2">
-                              <span>{item.name}</span>
-                              <span className="text-gray-400 text-sm">{item.amount} {item.unit}</span>
-                              {item.note && <span className="text-xs text-gray-500">{item.note}</span>}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
+                <>
+                  <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-lg relative">
+                      <button className="absolute top-2 right-2 p-2 text-gray-400 hover:text-gray-600" onClick={() => setViewHistoryIdx(null)}>×</button>
+                      <h2 className="text-xl font-extrabold mb-4">รายละเอียดการซื้อ - {new Date(history[viewHistoryIdx].date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</h2>
+                      {history[viewHistoryIdx].groups.map((group, gi) => (
+                        <div key={gi} className="mb-3">
+                          <div className="font-bold text-base text-green-700 mb-1">{group.place}</div>
+                          <ul className="flex flex-col gap-1">
+                            {group.items.map((item, idx) => (
+                              <li key={item.id} className="text-gray-700 text-base flex items-center gap-2">
+                                <span>{item.name}</span>
+                                <span className="text-gray-400 text-sm">{item.amount} {item.unit}</span>
+                                {item.note && <span className="text-xs text-gray-500">{item.note}</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                      {/* ปุ่มดูใบเสร็จ */}
+                      {history[viewHistoryIdx].receiptsId && (
+                        <button
+                          className="mt-4 w-full py-2 rounded bg-blue-500 text-white font-bold hover:bg-blue-600"
+                          onClick={() => setShowReceiptView({ idx: viewHistoryIdx })}
+                        >
+                          🧾 ดูใบเสร็จที่แนบไว้
+                        </button>
+                      )}
+                    </div>
                   </div>
-                </div>
+                  {/* Modal แสดงภาพใบเสร็จ */}
+                  {showReceiptView && showReceiptView.idx === viewHistoryIdx && (
+                    <ReceiptViewModal
+                      receiptsId={history[viewHistoryIdx].receiptsId}
+                      onClose={() => setShowReceiptView(null)}
+                    />
+                  )}
+                </>
               )}
             </div>
           )}
