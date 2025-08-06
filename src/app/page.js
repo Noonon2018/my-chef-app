@@ -1,5 +1,18 @@
 "use client";
 import CurrentUserDisplay from "./CurrentUserDisplay";
+import LogPurchaseModal from "../components/LogPurchaseModal";
+import { Bar } from 'react-chartjs-2';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+// import imageCompression from "../imageCompression";
 // Modal สำหรับแก้ไขสูตรอาหาร
 function EditRecipeModal({ open, recipe, onSave, onClose }) {
   const iconOptions = React.useMemo(() => ["🍲","🥩","🐔","🐟","🥦","🍳","🍜","🍚","🍤","🥗","🍕","🍰"], []);
@@ -238,8 +251,63 @@ function AnalysisTab({ history, shoppingGroups, saveShoppingGroups }) {
     setRecipeStats(stats => ({ ...stats, [rid]: { ...(stats[rid]||{}), add: ((stats[rid]?.add||0)+1) } }));
   };
 
+  // --- วิเคราะห์ยอดใช้จ่ายรายเดือน ---
+  // สร้างข้อมูลกราฟจาก history
+  const monthlyExpense = {};
+  history.forEach(h => {
+    if (h.expenseTotal && !isNaN(h.expenseTotal)) {
+      const d = new Date(h.date);
+      const key = `${d.getFullYear()}-${(d.getMonth()+1).toString().padStart(2,'0')}`;
+      monthlyExpense[key] = (monthlyExpense[key] || 0) + parseFloat(h.expenseTotal);
+    }
+  });
+  const months = Object.keys(monthlyExpense).sort();
+  const expenses = months.map(m => monthlyExpense[m]);
+  const avgExpense = expenses.length > 0 ? (expenses.reduce((a,b)=>a+b,0)/expenses.length) : 0;
+  const maxExpense = Math.max(...expenses, 0);
+  const minExpense = Math.min(...expenses, 0);
+  const maxMonth = months[expenses.indexOf(maxExpense)] || "-";
+  const minMonth = months[expenses.indexOf(minExpense)] || "-";
+  const chartData = {
+    labels: months.map(m => {
+      const [y, mo] = m.split('-');
+      return `${mo}/${y}`;
+    }),
+    datasets: [
+      {
+        label: 'ยอดใช้จ่ายรวม (USD)',
+        data: expenses,
+        backgroundColor: 'rgba(34,197,94,0.7)',
+      },
+    ],
+  };
+  const chartOptions = {
+    responsive: true,
+    plugins: {
+      legend: { display: false },
+      title: { display: true, text: 'สรุปยอดใช้จ่ายรายเดือน (USD)' },
+    },
+    scales: {
+      y: { beginAtZero: true },
+    },
+  };
+
   return (
     <div className="mt-8 flex flex-col gap-8">
+      {/* กราฟวิเคราะห์ยอดใช้จ่าย */}
+      <div className="bg-white rounded-xl shadow p-6 flex flex-col gap-4">
+        <div className="font-bold text-lg mb-2 flex items-center gap-2">📊 กราฟยอดใช้จ่ายรายเดือน</div>
+        {months.length === 0 ? (
+          <div className="text-gray-400">ยังไม่มีข้อมูลยอดใช้จ่าย</div>
+        ) : (
+          <Bar data={chartData} options={chartOptions} />
+        )}
+        <div className="mt-4 flex flex-col gap-2 text-base">
+          <div>• ยอดใช้จ่ายเฉลี่ยต่อเดือน: <span className="font-bold text-green-700">${avgExpense.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+          <div>• เดือนที่ใช้จ่ายสูงสุด: <span className="font-bold text-red-600">{maxMonth}</span> <span className="font-bold">(${maxExpense.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span></div>
+          <div>• เดือนที่ใช้จ่ายต่ำสุด: <span className="font-bold text-blue-600">{minMonth}</span> <span className="font-bold">(${minExpense.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</span></div>
+        </div>
+      </div>
       {/* Pantry Staples Card (วัตถุดิบติดครัว) */}
 
       <AddRecipeModal
@@ -1480,19 +1548,125 @@ export default function Home() {
     setChecked(prev => ({ ...prev, [groupPlace + '-' + idx]: !prev[groupPlace + '-' + idx] }));
   };
 
-  // Receipt scan modal state
-  const [showReceiptModal, setShowReceiptModal] = useState(false);
-  const [pendingReceipts, setPendingReceipts] = useState(null); // { place: { url, ts } }
 
-  // End shopping: move to history and clear
+  // Manual expense modal state
+  const [showLogPurchaseModal, setShowLogPurchaseModal] = useState(false);
+  const [pendingExpenseData, setPendingExpenseData] = useState(null); // { total, date, stores, receipt }
+
+
+  // End shopping: open manual expense modal
   const handleEndShopping = () => {
     showConfirm(
       "คุณต้องการสิ้นสุดการซื้อและย้ายลิสต์นี้ไปที่ประวัติใช่ไหม?",
       () => {
         setConfirmModal(m => ({ ...m, open: false }));
-        setShowReceiptModal(true);
+        setShowLogPurchaseModal(true);
       }
     );
+  };
+
+  // Save manual expense to history
+  const handleLogPurchaseSave = async ({ total, date, stores, receipt }) => {
+    let listOwner = "";
+    if (typeof window !== "undefined") {
+      listOwner = localStorage.getItem("mychef_user") || "";
+    }
+    const now = Date.now();
+    // ลบใบเสร็จที่หมดอายุออกจาก localStorage ก่อนบันทึกใหม่
+    let allReceipts = {};
+    try {
+      allReceipts = JSON.parse(localStorage.getItem("mychef-receipts") || "{}") || {};
+      let changed = false;
+      Object.keys(allReceipts).forEach(key => {
+        const group = allReceipts[key];
+        if (group && typeof group === 'object') {
+          Object.keys(group).forEach(place => {
+            if (group[place]?.expire && group[place].expire < now) {
+              delete group[place];
+              changed = true;
+            }
+          });
+          if (Object.keys(group).length === 0) {
+            delete allReceipts[key];
+            changed = true;
+          }
+        }
+      });
+      if (changed) {
+        localStorage.setItem("mychef-receipts", JSON.stringify(allReceipts));
+      }
+    } catch {}
+    // Save receipt if present (compress and convert to base64)
+    let receiptsId = null;
+    let receiptSaveError = false;
+    let base64Compressed = null;
+    if (receipt instanceof File) {
+      try {
+        // Try compressing (ลดขนาดและคุณภาพ, บีบอัดเป็น webp)
+        const compressed = await imageCompression(receipt, {
+          maxWidthOrHeight: 720,
+          maxSizeMB: 0.15,
+          initialQuality: 0.5,
+          fileType: 'image/webp',
+          useWebWorker: true
+        });
+        base64Compressed = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = e => resolve(e.target.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(compressed);
+        });
+      } catch (e) {
+        // Compression failed, fallback to original file
+        try {
+          base64Compressed = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = e => resolve(e.target.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(receipt);
+          });
+          showAlert("❗️ ไม่สามารถบีบอัดภาพใบเสร็จได้ จะบันทึกภาพต้นฉบับแทน (อาจใช้พื้นที่มาก)");
+        } catch (err) {
+          receiptSaveError = true;
+          showAlert("❗️ ไม่สามารถบันทึกภาพใบเสร็จได้ กรุณาลองใหม่หรือลดขนาดภาพ (แนะนำไม่เกิน 1MB และขนาดภาพไม่เกิน 720px)");
+        }
+      }
+    }
+    if (base64Compressed) {
+      receiptsId = now + Math.random();
+      allReceipts[receiptsId] = { manual: { url: base64Compressed, expire: now + 48*60*60*1000 } };
+      try {
+        localStorage.setItem("mychef-receipts", JSON.stringify(allReceipts));
+      } catch (e) {
+        receiptSaveError = true;
+        receiptsId = null;
+        showAlert("❗️ ไม่สามารถบันทึกภาพใบเสร็จได้ (พื้นที่จัดเก็บเต็มหรือรูปใหญ่เกินไป)\nประวัติจะถูกบันทึกโดยไม่มีภาพใบเสร็จ");
+      }
+    }
+    // Save to history
+    const expenseTotal = (typeof total === 'string' && total.trim() === '') ? null : total;
+    const newHistory = [
+      {
+        date: date ? new Date(date).toISOString() : new Date().toISOString(),
+        groups: shoppingGroups,
+        owner: listOwner,
+        receiptsId,
+        expenseTotal,
+        stores,
+      },
+      ...history
+    ];
+    setHistory(newHistory);
+    localStorage.setItem("mychef-history", JSON.stringify(newHistory));
+    saveShoppingGroups([]);
+    setChecked({});
+    setShowLogPurchaseModal(false);
+    showToast(receiptSaveError ? "✓ บันทึกประวัติ (ไม่มีภาพใบเสร็จ)" : "✓ บันทึกประวัติการซื้อเรียบร้อยแล้ว");
+  };
+
+  // Cancel manual expense modal
+  const handleLogPurchaseCancel = () => {
+    setShowLogPurchaseModal(false);
   };
 
   // Handle receipt modal done
@@ -1681,13 +1855,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* Receipt Attachment Modal */}
-      <ReceiptAttachmentModal
-        open={showReceiptModal}
-        groups={shoppingGroups}
-        onDone={handleReceiptDone}
-        onCancel={handleReceiptCancel}
-      />
+      {/* Receipt Attachment Modal (removed, replaced by Manual Expense Modal) */}
       {/* Main Content */}
       <main className="flex-1 flex flex-col items-center justify-center p-6">
         <div className="w-full max-w-2xl mx-auto mt-8">
@@ -2023,6 +2191,14 @@ export default function Home() {
                   ✔️ สิ้นสุดการซื้อ
                 </button>
               )}
+              {/* Manual Expense Modal */}
+              <LogPurchaseModal
+                isOpen={showLogPurchaseModal}
+                onClose={handleLogPurchaseCancel}
+                onSave={handleLogPurchaseSave}
+                defaultDate={new Date().toISOString().slice(0, 10)}
+                stores={shoppingGroups.map(g => g.place)}
+              />
             </div>
           )}
 
@@ -2045,6 +2221,13 @@ export default function Home() {
                           <div>
                             <div className="text-green-700 font-bold text-base mb-1">รายการซื้อของ - {dateStr}</div>
                             <div className="text-gray-500 text-sm italic">ซื้อที่ {firstPlace} ({allItems.length} รายการ)</div>
+                            {/* เพิ่มยอดรวมและร้านค้า */}
+                            {h.expenseTotal !== undefined && h.expenseTotal !== null && h.expenseTotal !== '' && (
+                              <div className="text-blue-700 text-base font-bold mt-1">ยอดรวม: ${parseFloat(h.expenseTotal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                            )}
+                            {h.stores && h.stores.length > 0 && (
+                              <div className="text-xs text-gray-600 mt-1">ร้านค้า: <span className="font-bold text-green-700">{h.stores.join(', ')}</span></div>
+                            )}
                             {owner && <div className="text-xs text-gray-600 mt-1">ผู้จดลิสต์: <span className="font-bold text-green-700">{owner}</span></div>}
                           </div>
                           <button
@@ -2053,6 +2236,13 @@ export default function Home() {
                             title="ซื้อซ้ำ"
                           >🛒 ซื้อซ้ำ</button>
                         </div>
+                        {/* แสดงปุ่มดูใบเสร็จถ้ามี */}
+                        {h.receiptsId && (
+                          <button
+                            className="mt-2 w-full py-2 rounded bg-blue-500 text-white font-bold hover:bg-blue-600"
+                            onClick={e => { e.stopPropagation(); setViewHistoryIdx(i); setShowReceiptView({ idx: i }); }}
+                          >🧾 ดูใบเสร็จที่แนบไว้</button>
+                        )}
                       </li>
                     );
                   })}
@@ -2065,7 +2255,14 @@ export default function Home() {
                   <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
                     <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-lg relative">
                       <button className="absolute top-2 right-2 p-2 text-gray-400 hover:text-gray-600" onClick={() => setViewHistoryIdx(null)}>×</button>
-                      <h2 className="text-xl font-extrabold mb-4">รายละเอียดการซื้อ - {new Date(history[viewHistoryIdx].date).toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</h2>
+                      <h2 className="text-xl font-extrabold mb-4">รายละเอียดการซื้อ - {new Date(history[viewHistoryIdx].date).toLocaleString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</h2>
+                      {/* เพิ่มยอดรวมและร้านค้าใน modal รายละเอียด */}
+                      {history[viewHistoryIdx].expenseTotal !== undefined && history[viewHistoryIdx].expenseTotal !== null && history[viewHistoryIdx].expenseTotal !== '' && (
+                        <div className="text-blue-700 text-base font-bold mb-2">ยอดรวม: ${parseFloat(history[viewHistoryIdx].expenseTotal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      )}
+                      {history[viewHistoryIdx].stores && history[viewHistoryIdx].stores.length > 0 && (
+                        <div className="text-xs text-gray-600 mb-2">ร้านค้า: <span className="font-bold text-green-700">{history[viewHistoryIdx].stores.join(', ')}</span></div>
+                      )}
                       {history[viewHistoryIdx].groups.map((group, gi) => (
                         <div key={gi} className="mb-3">
                           <div className="font-bold text-base text-green-700 mb-1">{group.place}</div>
